@@ -8,8 +8,11 @@ extends Node3D
 signal delivered(order: DeliveryOrder)
 
 enum State { DOCKED, OUTBOUND, RETURNING }
-enum Stat { SPEED, ENERGY, CARGO, STRENGTH }
+enum Stat { SPEED, ENERGY, STRENGTH }
 
+## Load that fills the cargo bar completely. Purely a display scale — there is
+## no capacity limit any more.
+const CARGO_BAR_FULL_TONS: float = 20.0
 const BODY_SIZE_RATIO: float = 0.07
 const BAR_WIDTH_RATIO: float = 0.11
 const BAR_HEIGHT_RATIO: float = 0.014
@@ -40,7 +43,6 @@ var title: String = "Rover"
 var color: Color = Color.WHITE
 var base_speed_deg: float = 18.0
 var max_energy: float = 150.0
-var max_cargo: float = 6.0
 var strength: float = 6.0
 var energy: float = 150.0
 
@@ -51,7 +53,7 @@ var cargo: float = 0.0
 var _planet_radius: float = 1.0
 var _state: State = State.DOCKED
 var _order: DeliveryOrder = null
-var _levels: Array[int] = [0, 0, 0, 0]
+var _levels: Array[int] = [0, 0, 0]
 var _moving: bool = false
 var _start_unit: Vector3 = Vector3.RIGHT
 var _axis: Vector3 = Vector3.UP
@@ -79,10 +81,6 @@ func is_busy() -> bool:
 	return _state != State.DOCKED
 
 
-func energy_needed(arc_deg: float) -> float:
-	return arc_deg * Balance.ENERGY_PER_DEG
-
-
 ## Speed with the given load: heavy cargo costs speed unless strength is high.
 func loaded_speed(cargo_amount: float) -> float:
 	return Balance.loaded_speed(base_speed_deg, strength, cargo_amount)
@@ -93,13 +91,19 @@ func travel_time(distance_deg: float, cargo_amount: float) -> float:
 	return distance_deg / loaded_speed(cargo_amount) + distance_deg / base_speed_deg
 
 
+## True when a full battery would be enough, whatever the rover is doing now.
+func can_ever_deliver(distance_deg: float, cargo_amount: float) -> bool:
+	return max_energy + 0.001 >= Balance.trip_energy(distance_deg, cargo_amount)
+
+
 ## Empty string means the rover can take the job; otherwise it is the reason.
-func rejection_reason(required_cargo: float, round_trip_deg: float) -> String:
+func rejection_reason(distance_deg: float, cargo_amount: float) -> String:
 	if is_busy():
 		return "занят"
-	if max_cargo + 0.001 < required_cargo:
-		return "мало грузоподъёмности"
-	if energy + 0.001 < energy_needed(round_trip_deg):
+	var needed: float = Balance.trip_energy(distance_deg, cargo_amount)
+	if max_energy + 0.001 < needed:
+		return "не хватит даже полной энергии"
+	if energy + 0.001 < needed:
 		return "мало энергии"
 	return ""
 
@@ -121,8 +125,6 @@ func stat_value(stat: Stat) -> float:
 			return base_speed_deg
 		Stat.ENERGY:
 			return max_energy
-		Stat.CARGO:
-			return max_cargo
 		Stat.STRENGTH:
 			return strength
 	return 0.0
@@ -134,8 +136,6 @@ func stat_step(stat: Stat) -> float:
 			return Balance.SPEED_UPGRADE_STEP
 		Stat.ENERGY:
 			return Balance.ENERGY_UPGRADE_STEP
-		Stat.CARGO:
-			return Balance.CARGO_UPGRADE_STEP
 		Stat.STRENGTH:
 			return Balance.STRENGTH_UPGRADE_STEP
 	return 0.0
@@ -156,8 +156,6 @@ func apply_upgrade(stat: Stat) -> void:
 			base_speed_deg += step
 		Stat.ENERGY:
 			max_energy += step
-		Stat.CARGO:
-			max_cargo += step
 		Stat.STRENGTH:
 			strength += step
 	_levels[stat] += 1
@@ -183,8 +181,6 @@ func _stat_base_cost(stat: Stat) -> int:
 			return Balance.SPEED_UPGRADE_BASE_COST
 		Stat.ENERGY:
 			return Balance.ENERGY_UPGRADE_BASE_COST
-		Stat.CARGO:
-			return Balance.CARGO_UPGRADE_BASE_COST
 		Stat.STRENGTH:
 			return Balance.STRENGTH_UPGRADE_BASE_COST
 	return 0
@@ -209,7 +205,7 @@ func _advance(delta: float) -> void:
 	if _moving:
 		var step_rad: float = deg_to_rad(loaded_speed(cargo)) * delta
 		_travelled_rad += step_rad
-		energy = maxf(energy - energy_needed(rad_to_deg(step_rad)), 0.0)
+		energy = maxf(energy - Balance.energy_per_deg(cargo) * rad_to_deg(step_rad), 0.0)
 		if _travelled_rad >= _total_rad:
 			geo = _destination.copy()
 			_moving = false
@@ -254,7 +250,7 @@ func _heading_angle(frame: Basis, unit: Vector3) -> float:
 
 func _update_bars() -> void:
 	_energy_bar.set_ratio(energy / max_energy)
-	_cargo_bar.set_ratio(cargo / max_cargo)
+	_cargo_bar.set_ratio(cargo / CARGO_BAR_FULL_TONS)
 
 
 func _build_meshes() -> void:

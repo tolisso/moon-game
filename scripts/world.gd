@@ -96,7 +96,6 @@ func _spawn_fleet() -> void:
 		rover.max_energy = snappedf(
 			randf_range(Balance.START_ENERGY_MIN, Balance.START_ENERGY_MAX), 5.0
 		)
-		rover.max_cargo = float(randi_range(Balance.START_CARGO_MIN, Balance.START_CARGO_MAX))
 		rover.strength = snappedf(
 			randf_range(Balance.START_STRENGTH_MIN, Balance.START_STRENGTH_MAX), 1.0
 		)
@@ -122,7 +121,8 @@ func _handle_order_spawning(delta: float) -> void:
 
 
 func _spawn_order() -> void:
-	var reach_deg: float = minf(_fleet_reach_deg(), Balance.ORDER_MAX_DISTANCE_DEG)
+	var cargo: float = _next_order_cargo()
+	var reach_deg: float = minf(_fleet_reach_deg(cargo), Balance.ORDER_MAX_DISTANCE_DEG)
 	if reach_deg <= Balance.ORDER_MIN_DISTANCE_DEG:
 		return
 	var order: DeliveryOrder = DeliveryOrder.new()
@@ -130,34 +130,26 @@ func _spawn_order() -> void:
 	order.setup(
 		PLANET_RADIUS,
 		_geo_away_from_base(randf_range(Balance.ORDER_MIN_DISTANCE_DEG, reach_deg)),
-		_next_order_cargo()
+		cargo
 	)
 	_orders.append(order)
 
 
-## Grows linearly with play time, jittered, and never above what the best rover
-## can physically carry.
+## Grows linearly with play time, with some jitter around the trend.
 func _next_order_cargo() -> float:
 	var target: float = Balance.order_target_cargo(_elapsed)
 	var jitter: float = randf_range(
 		1.0 - Balance.ORDER_CARGO_JITTER, 1.0 + Balance.ORDER_CARGO_JITTER
 	)
-	return clampf(round(target * jitter), 1.0, _fleet_max_cargo())
+	return maxf(round(target * jitter), 1.0)
 
 
-## One-way distance the biggest battery in the fleet can still afford.
-func _fleet_reach_deg() -> float:
+## One-way distance the biggest battery in the fleet can afford with this load.
+func _fleet_reach_deg(cargo: float) -> float:
 	var best: float = 0.0
 	for rover in _rovers:
-		best = maxf(best, rover.max_energy / Balance.ENERGY_PER_DEG * 0.5)
+		best = maxf(best, Balance.reach_deg(rover.max_energy, cargo))
 	return best * Balance.ORDER_REACH_MARGIN
-
-
-func _fleet_max_cargo() -> float:
-	var best: float = 0.0
-	for rover in _rovers:
-		best = maxf(best, rover.max_cargo)
-	return best
 
 
 ## Random point at the given angular distance from the base, any direction.
@@ -172,8 +164,8 @@ func _geo_away_from_base(distance_deg: float) -> GeoCoord:
 
 
 func _on_dispatch_requested(rover: Rover, order: DeliveryOrder) -> void:
-	var round_trip_deg: float = _base.geo.arc_to_deg(order.geo) * 2.0
-	if order.assigned or not rover.rejection_reason(order.cargo, round_trip_deg).is_empty():
+	var distance_deg: float = _base.geo.arc_to_deg(order.geo)
+	if order.assigned or not rover.rejection_reason(distance_deg, order.cargo).is_empty():
 		return
 	order.set_assigned(true)
 	rover.dispatch(order)

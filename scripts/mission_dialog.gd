@@ -1,17 +1,16 @@
 class_name MissionDialog
 extends Control
 
-## Window that opens on a delivery order and lists the whole fleet: capacity,
-## energy, speed under this load, round-trip time and whether the rover can
-## take the job.
+## Window that opens on a delivery order. Rovers are sorted by delivery time as
+## if their battery were full; the ones that cannot make it even on a full
+## charge sink to the bottom of the list.
 
 signal dispatch_requested(rover: Rover, order: DeliveryOrder)
 
-const NAME_WIDTH: float = 90.0
-const CARGO_WIDTH: float = 80.0
-const ENERGY_WIDTH: float = 150.0
-const SPEED_WIDTH: float = 130.0
-const TIME_WIDTH: float = 80.0
+const NAME_WIDTH: float = 100.0
+const STATUS_WIDTH: float = 230.0
+const ENERGY_WIDTH: float = 130.0
+const SEND_WIDTH: float = 44.0
 
 
 ## One fleet entry; keeps the live cells so the list can update in place
@@ -20,23 +19,29 @@ class Row:
 	extends RefCounted
 
 	var rover: Rover = null
+	var status: Label = null
 	var energy: Label = null
-	var speed: Label = null
-	var time: Label = null
 	var send: Button = null
-	var reason: Label = null
 	var box: HBoxContainer = null
+	## Cells are created in the normal text colour; only switch the override
+	## when the state actually flips.
+	var _showing_reason: bool = false
 
-	func refresh(cargo: float, distance_deg: float) -> void:
+	func refresh(distance_deg: float, cargo: float) -> void:
 		energy.text = "энергия %.0f/%.0f" % [rover.energy, rover.max_energy]
-		speed.text = "%.0f → %.0f °/с" % [rover.base_speed_deg, rover.loaded_speed(cargo)]
-		time.text = "%.1f с" % rover.travel_time(distance_deg, cargo)
-		var why: String = rover.rejection_reason(cargo, distance_deg * 2.0)
+		var why: String = rover.rejection_reason(distance_deg, cargo)
 		var possible: bool = why.is_empty()
-		send.visible = possible
-		reason.visible = not possible
-		reason.text = why
-		box.modulate = Color(1.0, 1.0, 1.0, 1.0 if possible else 0.5)
+		if possible:
+			status.text = "%.1f с" % rover.travel_time(distance_deg, cargo)
+		else:
+			status.text = why
+		send.disabled = not possible
+		box.modulate = Color(1.0, 1.0, 1.0, 1.0 if possible else 0.55)
+		if _showing_reason != not possible:
+			_showing_reason = not possible
+			status.add_theme_color_override(
+				"font_color", UiKit.WARN_COLOR if _showing_reason else UiKit.TEXT_COLOR
+			)
 
 
 var _order: DeliveryOrder = null
@@ -56,7 +61,7 @@ func _ready() -> void:
 	_rows_box = VBoxContainer.new()
 	_rows_box.add_theme_constant_override("separation", 6)
 	column.add_child(_rows_box)
-	column.add_child(UiKit.hint("Скорость показана без груза → с этим грузом. Esc или ПКМ — закрыть"))
+	column.add_child(UiKit.hint("Сортировка по времени рейса. Esc или ПКМ — закрыть"))
 	visible = false
 
 
@@ -71,15 +76,22 @@ func showing_order() -> DeliveryOrder:
 func open(order: DeliveryOrder, fleet: Array[Rover], distance_deg: float) -> void:
 	_order = order
 	_distance_deg = distance_deg
+	var cargo: float = order.cargo
 	_title.text = (
-		"Заказ: %.0f т · до точки %.0f° · награда %d зол."
-		% [order.cargo, distance_deg, Balance.delivery_reward(distance_deg, order.cargo)]
+		"Заказ: %.0f т · %.0f° от базы · нужно энергии %.0f · награда %d зол."
+		% [
+			cargo,
+			distance_deg,
+			Balance.trip_energy(distance_deg, cargo),
+			Balance.delivery_reward(distance_deg, cargo),
+		]
 	)
+
 	for row in _rows:
 		_rows_box.remove_child(row.box)
 		row.box.queue_free()
 	_rows.clear()
-	for rover in fleet:
+	for rover in _sorted_fleet(fleet, distance_deg, cargo):
 		var row: Row = _build_row(rover)
 		_rows.append(row)
 		_rows_box.add_child(row.box)
@@ -103,11 +115,25 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 
+## Fastest first, ignoring the current charge; hopeless rovers last.
+func _sorted_fleet(fleet: Array[Rover], distance_deg: float, cargo: float) -> Array[Rover]:
+	var sorted: Array[Rover] = fleet.duplicate()
+	sorted.sort_custom(
+		func(a: Rover, b: Rover) -> bool:
+			var a_can: bool = a.can_ever_deliver(distance_deg, cargo)
+			var b_can: bool = b.can_ever_deliver(distance_deg, cargo)
+			if a_can != b_can:
+				return a_can
+			return a.travel_time(distance_deg, cargo) < b.travel_time(distance_deg, cargo)
+	)
+	return sorted
+
+
 func _refresh() -> void:
 	if _order == null:
 		return
 	for row in _rows:
-		row.refresh(_order.cargo, _distance_deg)
+		row.refresh(_distance_deg, _order.cargo)
 
 
 func _build_row(rover: Rover) -> Row:
@@ -116,22 +142,15 @@ func _build_row(rover: Rover) -> Row:
 	row.box = UiKit.row()
 	row.box.add_child(UiKit.swatch(rover.color))
 	row.box.add_child(UiKit.cell(rover.title, NAME_WIDTH))
-	row.box.add_child(UiKit.cell("до %.0f т" % rover.max_cargo, CARGO_WIDTH))
+	row.status = UiKit.cell("", STATUS_WIDTH)
+	row.box.add_child(row.status)
 	row.energy = UiKit.cell("", ENERGY_WIDTH)
 	row.box.add_child(row.energy)
-	row.speed = UiKit.cell("", SPEED_WIDTH)
-	row.box.add_child(row.speed)
-	row.time = UiKit.cell("", TIME_WIDTH)
-	row.box.add_child(row.time)
 
-	# Button and reason share a width so the panel does not jump when a rover
-	# switches between available and rejected.
-	row.send = UiKit.action_button("Отправить")
+	row.send = UiKit.action_button("▶", SEND_WIDTH)
+	row.send.tooltip_text = "Отправить"
 	row.send.pressed.connect(_on_send_pressed.bind(rover))
 	row.box.add_child(row.send)
-	row.reason = UiKit.cell("", UiKit.ACTION_WIDTH)
-	row.reason.add_theme_color_override("font_color", UiKit.WARN_COLOR)
-	row.box.add_child(row.reason)
 	return row
 
 

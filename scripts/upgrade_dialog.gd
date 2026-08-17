@@ -9,7 +9,6 @@ signal upgrade_requested(rover: Rover, stat: Rover.Stat)
 const STATS: Array[Rover.Stat] = [
 	Rover.Stat.SPEED,
 	Rover.Stat.ENERGY,
-	Rover.Stat.CARGO,
 	Rover.Stat.STRENGTH,
 ]
 const NAME_WIDTH: float = 110.0
@@ -140,8 +139,6 @@ func _stat_name(stat: Rover.Stat) -> String:
 			return "Скорость"
 		Rover.Stat.ENERGY:
 			return "Энергия"
-		Rover.Stat.CARGO:
-			return "Груз"
 		Rover.Stat.STRENGTH:
 			return "Сила"
 	return ""
@@ -153,7 +150,5 @@ func _format_stat(rover: Rover, stat: Rover.Stat) -> String:
 	match stat:
 		Rover.Stat.SPEED:
 			return "%.0f → %.0f °/с" % [current, upgraded]
-		Rover.Stat.CARGO:
-			return "%.0f → %.0f т" % [current, upgraded]
 		_:
 			return "%.0f → %.0f" % [current, upgraded]

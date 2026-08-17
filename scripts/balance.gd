@@ -12,15 +12,17 @@ const START_SPEED_MIN: float = 12.0
 const START_SPEED_MAX: float = 22.0
 const START_ENERGY_MIN: float = 120.0
 const START_ENERGY_MAX: float = 200.0
-const START_CARGO_MIN: int = 4
-const START_CARGO_MAX: int = 8
 const START_STRENGTH_MIN: float = 4.0
 const START_STRENGTH_MAX: float = 8.0
 
 # --- Energy ---
 
-## Energy spent per degree of arc, so energy doubles as a range in degrees.
+## Energy spent per degree of arc while empty, so energy reads as a range in
+## degrees for an empty rover.
 const ENERGY_PER_DEG: float = 1.0
+## Extra share of that cost per ton of cargo: 0.06 means a 10 ton load makes
+## every degree cost 1.6 times as much.
+const ENERGY_PER_DEG_PER_TON: float = 0.06
 const RECHARGE_PER_SEC: float = 12.0
 
 # --- Upgrades ---
@@ -31,8 +33,6 @@ const SPEED_UPGRADE_BASE_COST: int = 20
 const SPEED_UPGRADE_STEP: float = 3.0
 const ENERGY_UPGRADE_BASE_COST: int = 20
 const ENERGY_UPGRADE_STEP: float = 25.0
-const CARGO_UPGRADE_BASE_COST: int = 25
-const CARGO_UPGRADE_STEP: float = 2.0
 const STRENGTH_UPGRADE_BASE_COST: int = 25
 const STRENGTH_UPGRADE_STEP: float = 1.0
 
@@ -78,3 +78,18 @@ static func loaded_speed(base_speed: float, strength: float, cargo: float) -> fl
 	if cargo <= 0.0 or strength <= 0.0:
 		return base_speed
 	return base_speed * pow(0.5, cargo / strength)
+
+
+static func energy_per_deg(cargo: float) -> float:
+	return ENERGY_PER_DEG * (1.0 + ENERGY_PER_DEG_PER_TON * maxf(cargo, 0.0))
+
+
+## Whole delivery: loaded on the way out, empty on the way back. The same for
+## every rover, since only the load matters.
+static func trip_energy(distance_deg: float, cargo: float) -> float:
+	return distance_deg * (energy_per_deg(cargo) + energy_per_deg(0.0))
+
+
+## One-way distance a full battery of `max_energy` can afford with this load.
+static func reach_deg(max_energy: float, cargo: float) -> float:
+	return max_energy / (energy_per_deg(cargo) + energy_per_deg(0.0))
