@@ -1,8 +1,9 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://scripts/world.gd" id="1_world"]
 [ext_resource type="Script" path="res://scripts/graticule.gd" id="2_graticule"]
 [ext_resource type="Script" path="res://scripts/base_station.gd" id="3_base"]
+[ext_resource type="Script" path="res://scripts/mission_dialog.gd" id="4_dialog"]
 
 [sub_resource type="Environment" id="Environment_space"]
 background_mode = 1
@@ -51,3 +52,16 @@ script = ExtResource("3_base")
 [node name="Paths" type="Node3D" parent="PlanetPivot"]
 
 [node name="Rovers" type="Node3D" parent="PlanetPivot"]
+
+[node name="Orders" type="Node3D" parent="PlanetPivot"]
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="MissionDialog" type="Control" parent="UI"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("4_dialog")
