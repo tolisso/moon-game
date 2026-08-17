@@ -12,25 +12,27 @@ const PATH_SAMPLES: int = 96
 const CAMERA_MIN_DIST: float = 1.6
 const CAMERA_MAX_DIST: float = 6.0
 const CAMERA_ZOOM_STEP: float = 0.2
+const BASE_AREA_RADIUS_DEG: float = 18.0
 
 @onready var _planet_pivot: Node3D = $PlanetPivot
 @onready var _graticule: Graticule = $PlanetPivot/Graticule
+@onready var _base: BaseStation = $PlanetPivot/Base
 @onready var _rovers_root: Node3D = $PlanetPivot/Rovers
 @onready var _paths_root: Node3D = $PlanetPivot/Paths
 @onready var _camera: Camera3D = $Camera3D
-@onready var _info_label: Label = $UI/InfoLabel
 
-var _yaw_deg: float = 0.0
+## Chosen so the base sits in the middle of the screen at startup.
+var _yaw_deg: float = 310.0
 var _pitch_deg: float = 15.0
 var _camera_distance: float = 3.0
 var _rovers: Array[Rover] = []
 var _paths: Array[PathView] = []
 var _selected: Rover = null
-var _cursor_geo: GeoCoord = null
 
 
 func _ready() -> void:
 	_graticule.build(PLANET_RADIUS)
+	_base.setup(PLANET_RADIUS, GeoCoord.new(0.0, 40.0), BASE_AREA_RADIUS_DEG)
 	_spawn_rovers()
 	_apply_planet_rotation()
 	_apply_camera_distance()
@@ -38,8 +40,8 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_handle_rotation(delta)
+	_update_power(delta)
 	_refresh_paths()
-	_refresh_info()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -56,11 +58,6 @@ func _unhandled_input(event: InputEvent) -> void:
 			MOUSE_BUTTON_WHEEL_DOWN:
 				_camera_distance = minf(_camera_distance + CAMERA_ZOOM_STEP, CAMERA_MAX_DIST)
 				_apply_camera_distance()
-		return
-
-	var motion := event as InputEventMouseMotion
-	if motion != null:
-		_cursor_geo = _geo_under_cursor(motion.position)
 
 
 func _spawn_rovers() -> void:
@@ -87,7 +84,7 @@ func _spawn_rovers() -> void:
 
 
 func _handle_rotation(delta: float) -> void:
-	var spin: float = Input.get_axis("ui_left", "ui_right")
+	var spin: float = Input.get_axis("ui_right", "ui_left")
 	var tilt: float = Input.get_axis("ui_down", "ui_up")
 	if is_zero_approx(spin) and is_zero_approx(tilt):
 		return
@@ -111,6 +108,23 @@ func _apply_camera_distance() -> void:
 func _refresh_paths() -> void:
 	for i in _rovers.size():
 		_paths[i].refresh(_rovers[i].remaining_path(PATH_SAMPLES))
+
+
+## Recharges rovers inside the base area and shepherds dead ones back home.
+func _update_power(delta: float) -> void:
+	for rover in _rovers:
+		var inside_base: bool = _base.covers(rover.geo)
+		if inside_base:
+			rover.recharge(delta)
+		if not rover.is_out_of_charge():
+			continue
+		if inside_base:
+			if rover.is_moving():
+				rover.stop()
+		elif not rover.is_moving():
+			rover.send_home(_base.geo)
+	if _selected != null and not _selected.is_controllable():
+		_select(null)
 
 
 func _handle_click(screen_pos: Vector2) -> void:
@@ -137,6 +151,8 @@ func _rover_near(point: GeoCoord) -> Rover:
 	var best: Rover = null
 	var best_deg: float = PICK_ANGLE_DEG
 	for rover in _rovers:
+		if not rover.is_controllable():
+			continue
 		var distance: float = rover.geo.arc_to_deg(point)
 		if distance <= best_deg:
 			best_deg = distance
@@ -154,22 +170,3 @@ func _geo_under_cursor(screen_pos: Vector2) -> GeoCoord:
 	if not hit.hit:
 		return null
 	return Geo.geo_from_unit(hit.point)
-
-
-func _refresh_info() -> void:
-	var lines: PackedStringArray = PackedStringArray()
-	lines.append("Стрелки — вращение планеты · Колесо мыши — зум")
-	lines.append("ЛКМ по роверу — выбрать · ЛКМ по планете — приказ ехать · ПКМ — снять выбор")
-	if _selected == null:
-		lines.append("Ровер не выбран")
-	else:
-		var status: String = "стоит"
-		if _selected.is_moving():
-			status = (
-				"едет в (%s), осталось %.1f°"
-				% [str(_selected.target_geo()), _selected.remaining_arc_deg()]
-			)
-		lines.append("%s: (%s) — %s" % [_selected.title, str(_selected.geo), status])
-	if _cursor_geo != null:
-		lines.append("Курсор: (%s)" % str(_cursor_geo))
-	_info_label.text = "\n".join(lines)
