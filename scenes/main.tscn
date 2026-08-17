@@ -1,0 +1,61 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/world.gd" id="1_world"]
+[ext_resource type="Script" path="res://scripts/graticule.gd" id="2_graticule"]
+
+[sub_resource type="Environment" id="Environment_space"]
+background_mode = 1
+background_color = Color(0.027451, 0.0313726, 0.054902, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.454902, 0.505882, 0.639216, 1)
+ambient_light_energy = 0.4
+tonemap_mode = 2
+
+[sub_resource type="SphereMesh" id="SphereMesh_planet"]
+radius = 1.0
+height = 2.0
+radial_segments = 96
+rings = 48
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_planet"]
+albedo_color = Color(0.156863, 0.298039, 0.376471, 1)
+roughness = 0.85
+
+[node name="Main" type="Node3D"]
+script = ExtResource("1_world")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_space")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.766, 0, -0.643, -0.413, 0.766, -0.493, 0.493, 0.643, 0.587, 2, 3, 3)
+light_energy = 1.1
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 3)
+fov = 45.0
+
+[node name="PlanetPivot" type="Node3D" parent="."]
+
+[node name="PlanetMesh" type="MeshInstance3D" parent="PlanetPivot"]
+mesh = SubResource("SphereMesh_planet")
+material_override = SubResource("StandardMaterial3D_planet")
+
+[node name="Graticule" type="MeshInstance3D" parent="PlanetPivot"]
+script = ExtResource("2_graticule")
+
+[node name="Paths" type="Node3D" parent="PlanetPivot"]
+
+[node name="Rovers" type="Node3D" parent="PlanetPivot"]
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="InfoLabel" type="Label" parent="UI"]
+offset_left = 16.0
+offset_top = 12.0
+offset_right = 1000.0
+offset_bottom = 120.0
+theme_override_colors/font_color = Color(0.878431, 0.929412, 1, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.784314)
+theme_override_constants/outline_size = 6
+theme_override_font_sizes/font_size = 15
