@@ -7,6 +7,7 @@ extends Node3D
 
 const BASE_RADIUS_DEG: float = 2.2
 const RADIUS_PER_CARGO_DEG: float = 0.32
+const MAX_RADIUS_DEG: float = 9.0
 const RING_WIDTH_RATIO: float = 0.01
 const CLICK_MARGIN_DEG: float = 2.5
 const AREA_OFFSET: float = 1.0016
@@ -25,7 +26,7 @@ var _colors: Array[Color] = []
 func setup(planet_radius: float, place: GeoCoord, required_cargo: float) -> void:
 	geo = place.copy()
 	cargo = required_cargo
-	_radius_deg = BASE_RADIUS_DEG + cargo * RADIUS_PER_CARGO_DEG
+	_radius_deg = minf(BASE_RADIUS_DEG + cargo * RADIUS_PER_CARGO_DEG, MAX_RADIUS_DEG)
 	var centre: Vector3 = geo.to_unit()
 	_add(
 		SphereShapes.cap(centre, _radius_deg, planet_radius, AREA_OFFSET, Color(1.0, 0.6, 0.2, 0.22))

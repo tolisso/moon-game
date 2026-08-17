@@ -14,6 +14,11 @@ const PAD_OFFSET: float = 1.004
 var geo: GeoCoord = GeoCoord.new()
 
 
+## True when a click at `point` counts as clicking the base.
+func covers(point: GeoCoord) -> bool:
+	return geo.arc_to_deg(point) <= YARD_RADIUS_DEG
+
+
 func setup(planet_radius: float, place: GeoCoord) -> void:
 	geo = place.copy()
 	var centre: Vector3 = geo.to_unit()
