@@ -4,8 +4,8 @@ extends Node3D
 ## Home base: the only permanent object on the map. Rovers are parked here,
 ## invisible, until they are dispatched on a delivery.
 
-const PAD_RADIUS_DEG: float = 5.0
-const YARD_RADIUS_DEG: float = 12.0
+const PAD_RADIUS_DEG: float = 3.0
+const YARD_RADIUS_DEG: float = 7.0
 const RING_WIDTH_RATIO: float = 0.012
 const YARD_OFFSET: float = 1.0015
 const RING_OFFSET: float = 1.0025

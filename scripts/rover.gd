@@ -3,16 +3,14 @@ extends Node3D
 
 ## A delivery unit. Parked and invisible at the base until dispatched, then it
 ## drives to the drop point along the shortest great-circle arc and comes back.
-## Stats start random and are improved with gold at the base.
+## Energy (1..6) is a one-way range of `energy * 30` degrees. Weight (1..6) is
+## the heaviest order it can carry. Speed is the same for every rover.
 
 signal delivered(order: DeliveryOrder)
 
 enum State { DOCKED, OUTBOUND, RETURNING }
-enum Stat { SPEED, ENERGY, STRENGTH }
+enum Stat { ENERGY, WEIGHT }
 
-## Load that fills the cargo bar completely. Purely a display scale — there is
-## no capacity limit any more.
-const CARGO_BAR_FULL_TONS: float = 20.0
 const BODY_SIZE_RATIO: float = 0.07
 const BAR_WIDTH_RATIO: float = 0.11
 const BAR_HEIGHT_RATIO: float = 0.014
@@ -41,10 +39,9 @@ class Bar:
 
 var title: String = "Rover"
 var color: Color = Color.WHITE
-var base_speed_deg: float = 18.0
-var max_energy: float = 150.0
-var strength: float = 6.0
-var energy: float = 150.0
+var max_energy: int = Balance.START_ENERGY
+var max_weight: int = Balance.START_WEIGHT
+var energy: float = float(Balance.START_ENERGY)
 
 var geo: GeoCoord = GeoCoord.new()
 var home: GeoCoord = GeoCoord.new()
@@ -53,7 +50,6 @@ var cargo: float = 0.0
 var _planet_radius: float = 1.0
 var _state: State = State.DOCKED
 var _order: DeliveryOrder = null
-var _levels: Array[int] = [0, 0, 0]
 var _moving: bool = false
 var _start_unit: Vector3 = Vector3.RIGHT
 var _axis: Vector3 = Vector3.UP
@@ -70,7 +66,7 @@ func initialize(planet_radius: float, home_geo: GeoCoord) -> void:
 	_planet_radius = planet_radius
 	home = home_geo.copy()
 	geo = home.copy()
-	energy = max_energy
+	energy = float(max_energy)
 	_build_meshes()
 	_apply_transform()
 	_update_bars()
@@ -81,34 +77,60 @@ func is_busy() -> bool:
 	return _state != State.DOCKED
 
 
-## Speed with the given load: heavy cargo costs speed unless strength is high.
-func loaded_speed(cargo_amount: float) -> float:
-	return Balance.loaded_speed(base_speed_deg, strength, cargo_amount)
+func current_range_deg() -> float:
+	return Balance.range_deg(energy)
 
 
-## Full round trip: loaded on the way out, empty on the way back.
-func travel_time(distance_deg: float, cargo_amount: float) -> float:
-	return distance_deg / loaded_speed(cargo_amount) + distance_deg / base_speed_deg
+func max_range_deg() -> float:
+	return Balance.range_deg(float(max_energy))
 
 
-## True when a full battery would be enough, whatever the rover is doing now.
-func can_ever_deliver(distance_deg: float, cargo_amount: float) -> bool:
-	return max_energy + 0.001 >= Balance.trip_energy(distance_deg, cargo_amount)
+## True when a full battery can cover the one-way trip to this order.
+func can_reach(distance_deg: float) -> bool:
+	return float(max_energy) + 0.001 >= Balance.energy_needed(distance_deg)
 
 
-## Empty string means the rover can take the job; otherwise it is the reason.
-func rejection_reason(distance_deg: float, cargo_amount: float) -> String:
-	if is_busy():
-		return "занят"
-	var needed: float = Balance.trip_energy(distance_deg, cargo_amount)
-	if max_energy + 0.001 < needed:
-		return "не хватит даже полной энергии"
+func can_carry(weight: float) -> bool:
+	return float(max_weight) + 0.001 >= weight
+
+
+func can_start_now(distance_deg: float, weight: float) -> bool:
+	if is_busy() or not can_reach(distance_deg) or not can_carry(weight):
+		return false
+	return energy + 0.001 >= Balance.energy_needed(distance_deg)
+
+
+## Seconds until this rover is docked, charged enough, and free to take a job
+## at `distance_deg`. Ignores weight.
+func wait_until_start(distance_deg: float) -> float:
+	var wait: float = remaining_trip_time()
+	var needed: float = Balance.energy_needed(distance_deg)
 	if energy + 0.001 < needed:
-		return "мало энергии"
-	return ""
+		wait += Balance.recharge_time(needed - energy)
+	return wait
+
+
+func remaining_trip_time() -> float:
+	if not is_busy():
+		return 0.0
+	var remaining_leg: float = remaining_arc_deg() / Balance.ROVER_SPEED_DEG
+	if _state == State.OUTBOUND and _destination != null:
+		return remaining_leg + home.arc_to_deg(_destination) / Balance.ROVER_SPEED_DEG
+	return remaining_leg
+
+
+func remaining_arc_deg() -> float:
+	if not _moving:
+		return 0.0
+	return rad_to_deg(_total_rad - _travelled_rad)
+
+
+func travel_time(distance_deg: float) -> float:
+	return Balance.travel_time(distance_deg)
 
 
 func dispatch(order: DeliveryOrder) -> void:
+	energy = maxf(energy - Balance.energy_needed(home.arc_to_deg(order.geo)), 0.0)
 	_order = order
 	cargo = order.cargo
 	_state = State.OUTBOUND
@@ -121,44 +143,29 @@ func dispatch(order: DeliveryOrder) -> void:
 
 func stat_value(stat: Stat) -> float:
 	match stat:
-		Stat.SPEED:
-			return base_speed_deg
 		Stat.ENERGY:
-			return max_energy
-		Stat.STRENGTH:
-			return strength
+			return float(max_energy)
+		Stat.WEIGHT:
+			return float(max_weight)
 	return 0.0
 
 
-func stat_step(stat: Stat) -> float:
-	match stat:
-		Stat.SPEED:
-			return Balance.SPEED_UPGRADE_STEP
-		Stat.ENERGY:
-			return Balance.ENERGY_UPGRADE_STEP
-		Stat.STRENGTH:
-			return Balance.STRENGTH_UPGRADE_STEP
-	return 0.0
+func is_stat_maxed(stat: Stat) -> bool:
+	return int(stat_value(stat)) >= Balance.STAT_MAX
 
 
-func upgrade_cost(stat: Stat) -> int:
-	return Balance.upgrade_cost(_stat_base_cost(stat), _levels[stat])
-
-
-func upgrade_level(stat: Stat) -> int:
-	return _levels[stat]
+func upgrade_cost(_stat: Stat) -> int:
+	return Balance.UPGRADE_COST
 
 
 func apply_upgrade(stat: Stat) -> void:
-	var step: float = stat_step(stat)
+	if is_stat_maxed(stat):
+		return
 	match stat:
-		Stat.SPEED:
-			base_speed_deg += step
 		Stat.ENERGY:
-			max_energy += step
-		Stat.STRENGTH:
-			strength += step
-	_levels[stat] += 1
+			max_energy += 1
+		Stat.WEIGHT:
+			max_weight += 1
 
 
 ## Points of the current leg still ahead, in planet-local unit vectors.
@@ -170,20 +177,10 @@ func remaining_path(samples: int) -> PackedVector3Array:
 
 func _process(delta: float) -> void:
 	if _state == State.DOCKED:
-		energy = minf(energy + Balance.RECHARGE_PER_SEC * delta, max_energy)
+		energy = minf(energy + Balance.RECHARGE_PER_SEC * delta, float(max_energy))
+		_update_bars()
 		return
 	_advance(delta)
-
-
-func _stat_base_cost(stat: Stat) -> int:
-	match stat:
-		Stat.SPEED:
-			return Balance.SPEED_UPGRADE_BASE_COST
-		Stat.ENERGY:
-			return Balance.ENERGY_UPGRADE_BASE_COST
-		Stat.STRENGTH:
-			return Balance.STRENGTH_UPGRADE_BASE_COST
-	return 0
 
 
 func _begin_move(destination: GeoCoord) -> void:
@@ -203,9 +200,8 @@ func _begin_move(destination: GeoCoord) -> void:
 func _advance(delta: float) -> void:
 	var arrived: bool = not _moving
 	if _moving:
-		var step_rad: float = deg_to_rad(loaded_speed(cargo)) * delta
+		var step_rad: float = deg_to_rad(Balance.ROVER_SPEED_DEG) * delta
 		_travelled_rad += step_rad
-		energy = maxf(energy - Balance.energy_per_deg(cargo) * rad_to_deg(step_rad), 0.0)
 		if _travelled_rad >= _total_rad:
 			geo = _destination.copy()
 			_moving = false
@@ -249,8 +245,8 @@ func _heading_angle(frame: Basis, unit: Vector3) -> float:
 
 
 func _update_bars() -> void:
-	_energy_bar.set_ratio(energy / max_energy)
-	_cargo_bar.set_ratio(cargo / CARGO_BAR_FULL_TONS)
+	_energy_bar.set_ratio(energy / float(max_energy))
+	_cargo_bar.set_ratio(cargo / float(Balance.STAT_MAX))
 
 
 func _build_meshes() -> void:

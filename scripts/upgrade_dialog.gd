@@ -1,19 +1,14 @@
 class_name UpgradeDialog
 extends Control
 
-## Base window: spend gold on rover stats. Prices grow by a factor per purchase
-## (see `Balance.UPGRADE_COST_GROWTH`), the stats themselves grow linearly.
+## Base window: spend gold on energy and weight, 1 coin per level, cap 6.
 
 signal upgrade_requested(rover: Rover, stat: Rover.Stat)
 
-const STATS: Array[Rover.Stat] = [
-	Rover.Stat.SPEED,
-	Rover.Stat.ENERGY,
-	Rover.Stat.STRENGTH,
-]
+const STATS: Array[Rover.Stat] = [Rover.Stat.ENERGY, Rover.Stat.WEIGHT]
 const NAME_WIDTH: float = 110.0
-const VALUE_WIDTH: float = 170.0
-const COST_WIDTH: float = 120.0
+const VALUE_WIDTH: float = 140.0
+const COST_WIDTH: float = 90.0
 const INDENT_WIDTH: float = 24.0
 
 
@@ -21,7 +16,7 @@ class Row:
 	extends RefCounted
 
 	var rover: Rover = null
-	var stat: Rover.Stat = Rover.Stat.SPEED
+	var stat: Rover.Stat = Rover.Stat.ENERGY
 	var value: Label = null
 	var button: Button = null
 
@@ -95,10 +90,15 @@ func _refresh() -> void:
 	for header in _headers:
 		header.status.text = "в рейсе" if header.rover.is_busy() else "на базе"
 	for row in _rows:
-		row.value.text = _format_stat(row.rover, row.stat)
-		var cost: int = row.rover.upgrade_cost(row.stat)
-		row.button.text = "%d зол." % cost
-		row.button.disabled = _gold < cost
+		var current: int = int(row.rover.stat_value(row.stat))
+		if row.rover.is_stat_maxed(row.stat):
+			row.value.text = "%d (макс)" % current
+			row.button.text = "макс"
+			row.button.disabled = true
+		else:
+			row.value.text = "%d → %d" % [current, current + 1]
+			row.button.text = "%d зол." % row.rover.upgrade_cost(row.stat)
+			row.button.disabled = _gold < row.rover.upgrade_cost(row.stat)
 
 
 func _build_rover_block(rover: Rover) -> void:
@@ -135,20 +135,8 @@ func _on_upgrade_pressed(rover: Rover, stat: Rover.Stat) -> void:
 
 func _stat_name(stat: Rover.Stat) -> String:
 	match stat:
-		Rover.Stat.SPEED:
-			return "Скорость"
 		Rover.Stat.ENERGY:
-			return "Энергия"
-		Rover.Stat.STRENGTH:
-			return "Сила"
+			return "Заряд"
+		Rover.Stat.WEIGHT:
+			return "Вес"
 	return ""
-
-
-func _format_stat(rover: Rover, stat: Rover.Stat) -> String:
-	var current: float = rover.stat_value(stat)
-	var upgraded: float = current + rover.stat_step(stat)
-	match stat:
-		Rover.Stat.SPEED:
-			return "%.0f → %.0f °/с" % [current, upgraded]
-		_:
-			return "%.0f → %.0f" % [current, upgraded]
