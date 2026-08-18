@@ -6,10 +6,12 @@ extends PanelContainer
 signal send_pressed(order: DeliveryOrder)
 
 const CARD_WIDTH: float = 118.0
+const TIMER_HEIGHT: float = 6.0
 
 
 var order: DeliveryOrder = null
 
+var _timer: ProgressBar = null
 var _reward: Label = null
 var _weight: Label = null
 var _action: Label = null
@@ -24,6 +26,15 @@ func _ready() -> void:
 	var column: VBoxContainer = VBoxContainer.new()
 	column.add_theme_constant_override("separation", 4)
 	add_child(column)
+
+	_timer = ProgressBar.new()
+	_timer.custom_minimum_size = Vector2(CARD_WIDTH - 16.0, TIMER_HEIGHT)
+	_timer.max_value = 1.0
+	_timer.value = 1.0
+	_timer.show_percentage = false
+	_timer.add_theme_stylebox_override("background", _timer_back())
+	_timer.add_theme_stylebox_override("fill", _timer_fill())
+	column.add_child(_timer)
 
 	_reward = UiKit.label("", UiKit.CELL_FONT_SIZE, UiKit.TITLE_COLOR)
 	column.add_child(_reward)
@@ -41,13 +52,22 @@ func setup(target: DeliveryOrder) -> void:
 	order = target
 	_reward.text = "%d золото" % Balance.DELIVERY_REWARD
 	_weight.text = "вес %d" % int(target.cargo)
+	_timer.value = target.lifetime_ratio()
 
 
 func refresh(rover: Rover, distance_deg: float) -> void:
 	if rover == null or order == null:
 		return
+	_timer.value = order.lifetime_ratio()
+	var expired: bool = order.time_left <= 0.0
 	var too_heavy: bool = not rover.can_carry(order.cargo)
-	_send.visible = not too_heavy
+	_send.visible = not too_heavy and not expired
+	if expired:
+		_action.visible = true
+		_action.text = "истекло"
+		_action.add_theme_color_override("font_color", UiKit.WARN_COLOR)
+		_send.disabled = true
+		return
 	if too_heavy:
 		_action.visible = true
 		_action.text = "вес"
@@ -81,4 +101,18 @@ func _style() -> StyleBoxFlat:
 	style.set_border_width_all(1)
 	style.set_corner_radius_all(5)
 	style.set_content_margin_all(8.0)
+	return style
+
+
+func _timer_back() -> StyleBoxFlat:
+	var style: StyleBoxFlat = StyleBoxFlat.new()
+	style.bg_color = Color(0.08, 0.1, 0.14, 1.0)
+	style.set_corner_radius_all(2)
+	return style
+
+
+func _timer_fill() -> StyleBoxFlat:
+	var style: StyleBoxFlat = StyleBoxFlat.new()
+	style.bg_color = Color(1.0, 0.72, 0.28, 1.0)
+	style.set_corner_radius_all(2)
 	return style

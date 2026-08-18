@@ -29,12 +29,12 @@ const UPGRADE_COST: int = 1
 
 const MAX_ORDERS: int = 5
 const START_ORDERS: int = 2
-const ORDER_INTERVAL_MIN: float = 5.0
-const ORDER_INTERVAL_MAX: float = 11.0
-const ORDER_MIN_DISTANCE_DEG: float = 12.0
-const ORDER_MAX_DISTANCE_DEG: float = 170.0
+const ORDER_SPAWN_INTERVAL: float = 5.0
+const ORDER_LIFETIME: float = 30.0
+## Closest an order can appear from the base, in degrees (independent of the
+## distance slider tiers).
+const ORDER_MIN_DISTANCE_DEG: float = 5.0
 const ORDER_WEIGHT_MIN: int = 1
-const ORDER_WEIGHT_MAX: int = 6
 
 # --- Gold ---
 
@@ -62,3 +62,8 @@ static func recharge_time(missing_energy: float) -> float:
 
 static func delivery_reward(_distance_deg: float, _weight: float) -> int:
 	return DELIVERY_REWARD
+
+
+## Slider tiers 1..6 map to spawn distance the same way rover energy does.
+static func distance_deg_for_tier(tier: int) -> float:
+	return float(clampi(tier, STAT_MIN, STAT_MAX)) * RANGE_PER_ENERGY

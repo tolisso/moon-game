@@ -28,19 +28,24 @@ const NUMBER_KEYS_PAD: Array[int] = [KEY_KP_1, KEY_KP_2, KEY_KP_3]
 @onready var _gold_label: Label = $UI/GoldLabel
 @onready var _status_label: Label = $UI/StatusLabel
 @onready var _popups_root: Control = $UI/OrderPopups
+@onready var _distance_slider: HSlider = $UI/SpawnSettings/DistanceRow/DistanceSlider
+@onready var _distance_value: Label = $UI/SpawnSettings/DistanceRow/DistanceValue
+@onready var _weight_slider: HSlider = $UI/SpawnSettings/WeightRow/WeightSlider
+@onready var _weight_value: Label = $UI/SpawnSettings/WeightRow/WeightValue
 
 ## Pitch is clamped to ±85°; start at the top so the north-pole base faces us.
 var _yaw_deg: float = 0.0
 var _pitch_deg: float = MAX_PITCH_DEG
 var _camera_distance: float = 3.0
 var _gold: int = Balance.START_GOLD
-var _elapsed: float = 0.0
 var _rovers: Array[Rover] = []
 var _paths: Array[PathView] = []
 var _orders: Array[DeliveryOrder] = []
 var _popups: Array[OrderPopup] = []
 var _next_order_in: float = 0.0
 var _selected: Rover = null
+var _spawn_max_distance_tier: int = 3
+var _spawn_max_weight_tier: int = 3
 
 
 func _ready() -> void:
@@ -48,6 +53,7 @@ func _ready() -> void:
 	_base.setup(PLANET_RADIUS, GeoCoord.new(BASE_GEO_LAT, BASE_GEO_LON))
 	_range_view.setup(PLANET_RADIUS)
 	_upgrade_dialog.upgrade_requested.connect(_on_upgrade_requested)
+	_setup_spawn_sliders()
 	_spawn_fleet()
 	_apply_planet_rotation()
 	_apply_camera_distance()
@@ -55,12 +61,40 @@ func _ready() -> void:
 	_refresh_status()
 	for i in Balance.START_ORDERS:
 		_spawn_order()
-	_next_order_in = randf_range(Balance.ORDER_INTERVAL_MIN, Balance.ORDER_INTERVAL_MAX)
+	_next_order_in = Balance.ORDER_SPAWN_INTERVAL
+
+
+func _setup_spawn_sliders() -> void:
+	for slider in [_distance_slider, _weight_slider]:
+		slider.min_value = Balance.STAT_MIN
+		slider.max_value = Balance.STAT_MAX
+		slider.step = 1.0
+		slider.focus_mode = Control.FOCUS_NONE
+	_distance_slider.value = _spawn_max_distance_tier
+	_weight_slider.value = _spawn_max_weight_tier
+	_distance_slider.value_changed.connect(_on_distance_tier_changed)
+	_weight_slider.value_changed.connect(_on_weight_tier_changed)
+	_refresh_spawn_labels()
+
+
+func _on_distance_tier_changed(value: float) -> void:
+	_spawn_max_distance_tier = int(value)
+	_refresh_spawn_labels()
+
+
+func _on_weight_tier_changed(value: float) -> void:
+	_spawn_max_weight_tier = int(value)
+	_refresh_spawn_labels()
+
+
+func _refresh_spawn_labels() -> void:
+	_distance_value.text = str(_spawn_max_distance_tier)
+	_weight_value.text = str(_spawn_max_weight_tier)
 
 
 func _process(delta: float) -> void:
-	_elapsed += delta
 	_handle_rotation(delta)
+	_tick_orders(delta)
 	_handle_order_spawning(delta)
 	_refresh_paths()
 	_refresh_selection_visuals()
@@ -136,19 +170,36 @@ func _handle_order_spawning(delta: float) -> void:
 	_next_order_in -= delta
 	if _next_order_in > 0.0:
 		return
-	_next_order_in = randf_range(Balance.ORDER_INTERVAL_MIN, Balance.ORDER_INTERVAL_MAX)
+	_next_order_in = Balance.ORDER_SPAWN_INTERVAL
 	_spawn_order()
 
 
+func _tick_orders(delta: float) -> void:
+	var expired: Array[DeliveryOrder] = []
+	for order in _orders:
+		order.tick(delta)
+		if order.is_expired():
+			expired.append(order)
+	for order in expired:
+		_remove_order(order)
+
+
+func _remove_order(order: DeliveryOrder) -> void:
+	_orders.erase(order)
+	order.queue_free()
+	if _selected != null:
+		_rebuild_popups()
+
+
 func _spawn_order() -> void:
+	var max_dist: float = Balance.distance_deg_for_tier(_spawn_max_distance_tier)
+	var min_dist: float = minf(Balance.ORDER_MIN_DISTANCE_DEG, max_dist)
 	var order: DeliveryOrder = DeliveryOrder.new()
 	_orders_root.add_child(order)
 	order.setup(
 		PLANET_RADIUS,
-		_geo_away_from_base(
-			randf_range(Balance.ORDER_MIN_DISTANCE_DEG, Balance.ORDER_MAX_DISTANCE_DEG)
-		),
-		float(randi_range(Balance.ORDER_WEIGHT_MIN, Balance.ORDER_WEIGHT_MAX))
+		_geo_away_from_base(randf_range(min_dist, max_dist)),
+		float(randi_range(Balance.ORDER_WEIGHT_MIN, _spawn_max_weight_tier))
 	)
 	_orders.append(order)
 	if _selected != null:
@@ -181,7 +232,7 @@ func _rebuild_popups() -> void:
 	if _selected == null:
 		return
 	for order in _orders:
-		if order.assigned:
+		if order.assigned or order.is_expired():
 			continue
 		var distance_deg: float = _base.geo.arc_to_deg(order.geo)
 		if not _selected.can_reach(distance_deg):
@@ -212,6 +263,9 @@ func _refresh_selection_visuals() -> void:
 	var surviving: Array[OrderPopup] = []
 	for popup in _popups:
 		if popup.order == null or not is_instance_valid(popup.order) or popup.order.assigned:
+			popup.queue_free()
+			continue
+		if popup.order.is_expired():
 			popup.queue_free()
 			continue
 		var distance_deg: float = _base.geo.arc_to_deg(popup.order.geo)
@@ -255,7 +309,7 @@ func _on_popup_send(order: DeliveryOrder) -> void:
 
 func _try_dispatch(rover: Rover, order: DeliveryOrder) -> void:
 	var distance_deg: float = _base.geo.arc_to_deg(order.geo)
-	if order.assigned or not rover.can_start_now(distance_deg, order.cargo):
+	if order.assigned or order.is_expired() or not rover.can_start_now(distance_deg, order.cargo):
 		return
 	order.set_assigned(true)
 	rover.dispatch(order)
@@ -265,10 +319,7 @@ func _try_dispatch(rover: Rover, order: DeliveryOrder) -> void:
 func _on_delivered(order: DeliveryOrder) -> void:
 	_gold += Balance.delivery_reward(_base.geo.arc_to_deg(order.geo), order.cargo)
 	_refresh_gold()
-	_orders.erase(order)
-	order.queue_free()
-	if _selected != null:
-		_rebuild_popups()
+	_remove_order(order)
 
 
 func _on_upgrade_requested(rover: Rover, stat: Rover.Stat) -> void:

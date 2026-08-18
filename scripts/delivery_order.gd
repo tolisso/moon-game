@@ -17,6 +17,7 @@ const DOT_OFFSET: float = 1.0036
 var geo: GeoCoord = GeoCoord.new()
 var cargo: float = 1.0
 var assigned: bool = false
+var time_left: float = Balance.ORDER_LIFETIME
 
 var _radius_deg: float = BASE_RADIUS_DEG
 var _pieces: Array[MeshInstance3D] = []
@@ -26,6 +27,7 @@ var _colors: Array[Color] = []
 func setup(planet_radius: float, place: GeoCoord, required_cargo: float) -> void:
 	geo = place.copy()
 	cargo = required_cargo
+	time_left = Balance.ORDER_LIFETIME
 	_radius_deg = minf(BASE_RADIUS_DEG + cargo * RADIUS_PER_CARGO_DEG, MAX_RADIUS_DEG)
 	var centre: Vector3 = geo.to_unit()
 	_add(
@@ -62,6 +64,20 @@ func set_assigned(value: bool) -> void:
 			color.a *= 0.55
 		var material: StandardMaterial3D = _pieces[i].material_override as StandardMaterial3D
 		material.albedo_color = color
+
+
+func tick(delta: float) -> void:
+	if assigned:
+		return
+	time_left = maxf(time_left - delta, 0.0)
+
+
+func is_expired() -> bool:
+	return not assigned and time_left <= 0.0
+
+
+func lifetime_ratio() -> float:
+	return clampf(time_left / Balance.ORDER_LIFETIME, 0.0, 1.0)
 
 
 func _add(piece: MeshInstance3D) -> void:
