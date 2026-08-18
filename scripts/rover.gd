@@ -3,8 +3,8 @@ extends Node3D
 
 ## A delivery unit. Parked and invisible at the base until dispatched, then it
 ## drives to the drop point along the shortest great-circle arc and comes back.
-## Energy (1..6) is a one-way range of `energy * 30` degrees. Weight (1..6) is
-## the heaviest order it can carry. Speed is the same for every rover.
+## Energy is the one-way cost of that arc, sampled through craters. Weight
+## (1..6) is the heaviest order it can carry. Craters halve speed.
 
 signal delivered(order: DeliveryOrder)
 
@@ -48,6 +48,7 @@ var home: GeoCoord = GeoCoord.new()
 var cargo: float = 0.0
 
 var _planet_radius: float = 1.0
+var _craters: Craters = null
 var _state: State = State.DOCKED
 var _order: DeliveryOrder = null
 var _moving: bool = false
@@ -62,8 +63,9 @@ var _energy_bar: Bar = null
 var _cargo_bar: Bar = null
 
 
-func initialize(planet_radius: float, home_geo: GeoCoord) -> void:
+func initialize(planet_radius: float, home_geo: GeoCoord, craters: Craters) -> void:
 	_planet_radius = planet_radius
+	_craters = craters
 	home = home_geo.copy()
 	geo = home.copy()
 	energy = float(max_energy)
@@ -77,45 +79,37 @@ func is_busy() -> bool:
 	return _state != State.DOCKED
 
 
-func current_range_deg() -> float:
-	return Balance.range_deg(energy)
-
-
-func max_range_deg() -> float:
-	return Balance.range_deg(float(max_energy))
-
-
 ## True when a full battery can cover the one-way trip to this order.
-func can_reach(distance_deg: float) -> bool:
-	return float(max_energy) + 0.001 >= Balance.energy_needed(distance_deg)
+func can_reach(dest: GeoCoord) -> bool:
+	return float(max_energy) + 0.001 >= _craters.energy_needed(home, dest)
 
 
 func can_carry(weight: float) -> bool:
 	return float(max_weight) + 0.001 >= weight
 
 
-func can_start_now(distance_deg: float, weight: float) -> bool:
-	if is_busy() or not can_reach(distance_deg) or not can_carry(weight):
+func can_start_now(dest: GeoCoord, weight: float) -> bool:
+	if is_busy() or not can_reach(dest) or not can_carry(weight):
 		return false
-	return energy + 0.001 >= Balance.energy_needed(distance_deg)
+	return energy + 0.001 >= _craters.energy_needed(home, dest)
 
 
 ## Seconds until this rover is docked, charged enough, and free to take a job
-## at `distance_deg`. Ignores weight.
-func wait_until_start(distance_deg: float) -> float:
+## at `dest`. Ignores weight.
+func wait_until_start(dest: GeoCoord) -> float:
 	var wait: float = remaining_trip_time()
-	var needed: float = Balance.energy_needed(distance_deg)
+	var needed: float = _craters.energy_needed(home, dest)
 	if energy + 0.001 < needed:
 		wait += Balance.recharge_time(needed - energy)
 	return wait
 
 
 func remaining_trip_time() -> float:
-	if not is_busy():
+	if not is_busy() or _destination == null:
 		return 0.0
-	var remaining_leg: float = remaining_arc_deg() / Balance.ROVER_SPEED_DEG
-	if _state == State.OUTBOUND and _destination != null:
-		return remaining_leg + home.arc_to_deg(_destination) / Balance.ROVER_SPEED_DEG
+	var remaining_leg: float = _craters.travel_time(geo, _destination)
+	if _state == State.OUTBOUND:
+		return remaining_leg + _craters.travel_time(_destination, home)
 	return remaining_leg
 
 
@@ -125,12 +119,8 @@ func remaining_arc_deg() -> float:
 	return rad_to_deg(_total_rad - _travelled_rad)
 
 
-func travel_time(distance_deg: float) -> float:
-	return Balance.travel_time(distance_deg)
-
-
 func dispatch(order: DeliveryOrder) -> void:
-	energy = maxf(energy - Balance.energy_needed(home.arc_to_deg(order.geo)), 0.0)
+	energy = maxf(energy - _craters.energy_needed(home, order.geo), 0.0)
 	_order = order
 	cargo = order.cargo
 	_state = State.OUTBOUND
@@ -200,7 +190,10 @@ func _begin_move(destination: GeoCoord) -> void:
 func _advance(delta: float) -> void:
 	var arrived: bool = not _moving
 	if _moving:
-		var step_rad: float = deg_to_rad(Balance.ROVER_SPEED_DEG) * delta
+		var speed_deg: float = Balance.ROVER_SPEED_DEG
+		if _craters.contains_geo(geo):
+			speed_deg *= Balance.CRATER_SPEED_FACTOR
+		var step_rad: float = deg_to_rad(speed_deg) * delta
 		_travelled_rad += step_rad
 		if _travelled_rad >= _total_rad:
 			geo = _destination.copy()

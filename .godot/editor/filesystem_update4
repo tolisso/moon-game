@@ -1,0 +1,8 @@
+res://scripts/balance.gd
+res://scripts/geo.gd
+res://scripts/order_popup.gd
+res://scripts/range_view.gd
+res://scripts/rover.gd
+res://scripts/sphere_shapes.gd
+res://scripts/world.gd
+res://scenes/main.tscn

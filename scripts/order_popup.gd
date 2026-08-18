@@ -61,7 +61,7 @@ func setup(target: DeliveryOrder) -> void:
 	_timer.value = target.lifetime_ratio()
 
 
-func refresh(rover: Rover, distance_deg: float) -> void:
+func refresh(rover: Rover) -> void:
 	if rover == null or order == null:
 		return
 	_timer.value = order.lifetime_ratio()
@@ -73,7 +73,7 @@ func refresh(rover: Rover, distance_deg: float) -> void:
 	elif too_heavy:
 		_set_button("вес", UiKit.WARN_COLOR, false)
 	else:
-		var wait: float = rover.wait_until_start(distance_deg)
+		var wait: float = rover.wait_until_start(order.geo)
 		if wait > 0.05:
 			_set_button("%.1f с" % wait, UiKit.HINT_COLOR, false)
 		else:

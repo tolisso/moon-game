@@ -1,66 +1,66 @@
 class_name RangeView
 extends Node3D
 
-## Two range rings around the base: current energy and a full battery.
-## A ring of 180° would collapse to the opposite pole, so radii are clamped.
+## One precomputed max-energy contour per battery level. Craters dent the
+## old circular range, so the meshes are built once at startup and then only
+## toggled visible.
 
 const RING_OFFSET: float = 1.003
 const RING_WIDTH_RATIO: float = 0.01
 const MAX_VISIBLE_DEG: float = 179.0
-const MIN_VISIBLE_DEG: float = 1.5
+const RAYS: int = 96
+const SEARCH_STEPS: int = 16
+const RING_COLOR: Color = Color(0.35, 0.7, 1.0, 0.55)
 
 var _planet_radius: float = 1.0
-var _current_ring: MeshInstance3D = null
-var _max_ring: MeshInstance3D = null
-var _shown_current: float = -1.0
-var _shown_max: float = -1.0
+var _rings: Array[MeshInstance3D] = []
 
 
 func setup(planet_radius: float) -> void:
 	_planet_radius = planet_radius
-	_max_ring = MeshInstance3D.new()
-	_current_ring = MeshInstance3D.new()
-	add_child(_max_ring)
-	add_child(_current_ring)
 	visible = false
+
+
+func build_contours(centre: GeoCoord, craters: Craters) -> void:
+	var origin: Vector3 = centre.to_unit()
+	var u: Vector3 = Geo.any_tangent(origin)
+	var v: Vector3 = origin.cross(u)
+	var width: float = _planet_radius * RING_WIDTH_RATIO
+	for energy in range(Balance.STAT_MIN, Balance.STAT_MAX + 1):
+		var points: PackedVector3Array = PackedVector3Array()
+		points.resize(RAYS)
+		for ray in RAYS:
+			var azimuth: float = TAU * float(ray) / float(RAYS)
+			var radial: Vector3 = u * cos(azimuth) + v * sin(azimuth)
+			points[ray] = _farthest_on_ray(centre, origin, radial, craters, float(energy))
+		var ring: MeshInstance3D = SphereShapes.closed_ribbon(
+			points, _planet_radius, RING_OFFSET, width, RING_COLOR
+		)
+		ring.visible = false
+		add_child(ring)
+		_rings.append(ring)
 
 
 func hide_ranges() -> void:
 	visible = false
-	_shown_current = -1.0
-	_shown_max = -1.0
 
 
-func show_ranges(centre: GeoCoord, current_deg: float, max_deg: float, show_current: bool) -> void:
+func show_max_energy(level: int) -> void:
 	visible = true
-	var current_draw: float = current_deg if show_current else -1.0
-	if is_equal_approx(current_draw, _shown_current) and is_equal_approx(max_deg, _shown_max):
-		return
-	_shown_current = current_draw
-	_shown_max = max_deg
-	_set_ring(
-		_max_ring, centre, max_deg, Color(0.35, 0.7, 1.0, 0.35), _planet_radius * RING_WIDTH_RATIO
-	)
-	_set_ring(
-		_current_ring,
-		centre,
-		current_draw,
-		Color(0.85, 0.95, 1.0, 0.85),
-		_planet_radius * RING_WIDTH_RATIO * 1.35
-	)
+	for i in _rings.size():
+		_rings[i].visible = i + Balance.STAT_MIN == level
 
 
-func _set_ring(
-	ring: MeshInstance3D, centre: GeoCoord, radius_deg: float, color: Color, width: float
-) -> void:
-	if radius_deg < MIN_VISIBLE_DEG or radius_deg > MAX_VISIBLE_DEG:
-		ring.visible = false
-		return
-	ring.visible = true
-	ring.mesh = null
-	var built: MeshInstance3D = SphereShapes.ring(
-		centre.to_unit(), radius_deg, _planet_radius, RING_OFFSET, width, color
-	)
-	ring.mesh = built.mesh
-	ring.material_override = built.material_override
-	built.queue_free()
+func _farthest_on_ray(
+	centre: GeoCoord, origin: Vector3, radial: Vector3, craters: Craters, energy: float
+) -> Vector3:
+	var lo: float = 0.0
+	var hi: float = MAX_VISIBLE_DEG
+	for _step in SEARCH_STEPS:
+		var mid: float = (lo + hi) * 0.5
+		var dest: GeoCoord = Geo.geo_from_unit(Geo.offset(origin, radial, deg_to_rad(mid)))
+		if craters.energy_needed(centre, dest) <= energy + 0.001:
+			lo = mid
+		else:
+			hi = mid
+	return Geo.offset(origin, radial, deg_to_rad(lo))

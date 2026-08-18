@@ -72,6 +72,12 @@ static func arc_angle(a: Vector3, b: Vector3) -> float:
 	return acos(clampf(a.normalized().dot(b.normalized()), -1.0, 1.0))
 
 
+## Point at angular distance `distance_rad` from `centre` along unit `radial`
+## in the tangent plane (the usual spherical exponential map).
+static func offset(centre: Vector3, radial: Vector3, distance_rad: float) -> Vector3:
+	return centre * cos(distance_rad) + radial * sin(distance_rad)
+
+
 ## Samples the arc that starts at `from`, rotates around `axis` and spans
 ## `[start_rad, end_rad]`.
 static func arc_points(

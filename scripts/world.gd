@@ -18,6 +18,7 @@ const NUMBER_KEYS_PAD: Array[int] = [KEY_KP_1, KEY_KP_2, KEY_KP_3]
 
 @onready var _planet_pivot: Node3D = $PlanetPivot
 @onready var _graticule: Graticule = $PlanetPivot/Graticule
+@onready var _craters: Craters = $PlanetPivot/Craters
 @onready var _base: BaseStation = $PlanetPivot/Base
 @onready var _rovers_root: Node3D = $PlanetPivot/Rovers
 @onready var _paths_root: Node3D = $PlanetPivot/Paths
@@ -51,7 +52,9 @@ var _spawn_max_weight_tier: int = 3
 func _ready() -> void:
 	_graticule.build(PLANET_RADIUS)
 	_base.setup(PLANET_RADIUS, GeoCoord.new(BASE_GEO_LAT, BASE_GEO_LON))
+	_craters.setup(PLANET_RADIUS, _base.geo)
 	_range_view.setup(PLANET_RADIUS)
+	_range_view.build_contours(_base.geo, _craters)
 	_upgrade_dialog.upgrade_requested.connect(_on_upgrade_requested)
 	_setup_spawn_sliders()
 	_spawn_fleet()
@@ -155,7 +158,7 @@ func _spawn_fleet() -> void:
 		rover.max_weight = Balance.START_WEIGHT
 		rover.delivered.connect(_on_delivered)
 		_rovers_root.add_child(rover)
-		rover.initialize(PLANET_RADIUS, _base.geo)
+		rover.initialize(PLANET_RADIUS, _base.geo, _craters)
 		_rovers.append(rover)
 
 		var path: PathView = PathView.new()
@@ -234,8 +237,7 @@ func _rebuild_popups() -> void:
 	for order in _orders:
 		if order.assigned or order.is_expired():
 			continue
-		var distance_deg: float = _base.geo.arc_to_deg(order.geo)
-		if not _selected.can_reach(distance_deg):
+		if not _selected.can_reach(order.geo):
 			continue
 		var popup: OrderPopup = OrderPopup.new()
 		_popups_root.add_child(popup)
@@ -254,12 +256,7 @@ func _refresh_selection_visuals() -> void:
 	_refresh_status()
 	if _selected == null:
 		return
-	_range_view.show_ranges(
-		_base.geo,
-		_selected.current_range_deg(),
-		_selected.max_range_deg(),
-		not _selected.is_busy()
-	)
+	_range_view.show_max_energy(_selected.max_energy)
 	var surviving: Array[OrderPopup] = []
 	for popup in _popups:
 		if popup.order == null or not is_instance_valid(popup.order) or popup.order.assigned:
@@ -268,11 +265,10 @@ func _refresh_selection_visuals() -> void:
 		if popup.order.is_expired():
 			popup.queue_free()
 			continue
-		var distance_deg: float = _base.geo.arc_to_deg(popup.order.geo)
-		if not _selected.can_reach(distance_deg):
+		if not _selected.can_reach(popup.order.geo):
 			popup.queue_free()
 			continue
-		popup.refresh(_selected, distance_deg)
+		popup.refresh(_selected)
 		_place_popup(popup)
 		surviving.append(popup)
 	_popups = surviving
@@ -308,8 +304,7 @@ func _on_popup_send(order: DeliveryOrder) -> void:
 
 
 func _try_dispatch(rover: Rover, order: DeliveryOrder) -> void:
-	var distance_deg: float = _base.geo.arc_to_deg(order.geo)
-	if order.assigned or order.is_expired() or not rover.can_start_now(distance_deg, order.cargo):
+	if order.assigned or order.is_expired() or not rover.can_start_now(order.geo, order.cargo):
 		return
 	order.set_assigned(true)
 	rover.dispatch(order)

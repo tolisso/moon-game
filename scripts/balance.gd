@@ -13,13 +13,23 @@ const START_ENERGY: int = 1
 const START_WEIGHT: int = 1
 ## Constant angular speed for every rover, degrees per second along the arc.
 const ROVER_SPEED_DEG: float = 8.0
+## Inside a crater the rover moves this much slower. Burn rate per second
+## stays the same, so energy and time per degree both scale by `1 / factor`.
+const CRATER_SPEED_FACTOR: float = 0.5
 
 # --- Energy ---
 
-## One-way range from the base: `energy * RANGE_PER_ENERGY` degrees.
-## Energy 6 covers a full hemisphere (180°).
+## One-way range from the base on clear ground: `energy * RANGE_PER_ENERGY`
+## degrees. Energy 6 covers a full hemisphere (180°) if the path is empty.
 const RANGE_PER_ENERGY: float = 30.0
 const RECHARGE_PER_SEC: float = 0.25
+## Equal-angle samples along a great-circle when costing a trip through craters.
+const PATH_SEGMENTS: int = 36
+
+# --- Craters ---
+
+const CRATER_COUNT: int = 10
+const CRATER_RADIUS_DEG: float = 12.0
 
 # --- Upgrades ---
 

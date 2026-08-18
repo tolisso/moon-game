@@ -67,6 +67,38 @@ static func ring(
 	return _instance(mesh, color)
 
 
+## Closed ribbon through unit-sphere samples. Used for non-circular range
+## contours where radius is no longer constant around the base.
+static func closed_ribbon(
+	units: PackedVector3Array,
+	planet_radius: float,
+	offset: float,
+	width: float,
+	color: Color
+) -> MeshInstance3D:
+	var count: int = units.size()
+	var mesh: ImmediateMesh = ImmediateMesh.new()
+	if count < 2:
+		return _instance(mesh, color)
+	var half_width: float = width * 0.5
+	mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLE_STRIP)
+	for i in count + 1:
+		var index: int = i % count
+		var unit: Vector3 = units[index]
+		var previous: Vector3 = units[(index - 1 + count) % count]
+		var next: Vector3 = units[(index + 1) % count]
+		var along: Vector3 = next - previous
+		along -= unit * unit.dot(along)
+		if along.length() < Geo.EPS:
+			along = Geo.any_tangent(unit)
+		var side: Vector3 = unit.cross(along.normalized()) * half_width
+		var centre: Vector3 = unit * planet_radius * offset
+		mesh.surface_add_vertex(centre + side)
+		mesh.surface_add_vertex(centre - side)
+	mesh.surface_end()
+	return _instance(mesh, color)
+
+
 static func circle_points(centre: Vector3, radius_deg: float) -> PackedVector3Array:
 	var u: Vector3 = Geo.any_tangent(centre)
 	var v: Vector3 = centre.cross(u)
