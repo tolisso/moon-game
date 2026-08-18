@@ -2,11 +2,15 @@ class_name OrderPopup
 extends PanelContainer
 
 ## Compact 2D card pinned above a delivery marker in screen space.
+## Every row has a fixed slot so refresh never changes size or shifts siblings.
 
 signal send_pressed(order: DeliveryOrder)
 
 const CARD_WIDTH: float = 118.0
+const CARD_HEIGHT: float = 86.0
 const TIMER_HEIGHT: float = 6.0
+const BUTTON_HEIGHT: float = 28.0
+const INNER_WIDTH: float = CARD_WIDTH - 16.0
 
 
 var order: DeliveryOrder = null
@@ -14,21 +18,23 @@ var order: DeliveryOrder = null
 var _timer: ProgressBar = null
 var _reward: Label = null
 var _weight: Label = null
-var _action: Label = null
 var _send: Button = null
 
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
-	custom_minimum_size = Vector2(CARD_WIDTH, 0.0)
+	custom_minimum_size = Vector2(CARD_WIDTH, CARD_HEIGHT)
+	size = Vector2(CARD_WIDTH, CARD_HEIGHT)
 	add_theme_stylebox_override("panel", _style())
 
 	var column: VBoxContainer = VBoxContainer.new()
+	column.custom_minimum_size = Vector2(INNER_WIDTH, CARD_HEIGHT - 16.0)
 	column.add_theme_constant_override("separation", 4)
 	add_child(column)
 
 	_timer = ProgressBar.new()
-	_timer.custom_minimum_size = Vector2(CARD_WIDTH - 16.0, TIMER_HEIGHT)
+	_timer.custom_minimum_size = Vector2(INNER_WIDTH, TIMER_HEIGHT)
+	_timer.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_timer.max_value = 1.0
 	_timer.value = 1.0
 	_timer.show_percentage = false
@@ -36,14 +42,14 @@ func _ready() -> void:
 	_timer.add_theme_stylebox_override("fill", _timer_fill())
 	column.add_child(_timer)
 
-	_reward = UiKit.label("", UiKit.CELL_FONT_SIZE, UiKit.TITLE_COLOR)
+	_reward = _fixed_label(UiKit.CELL_FONT_SIZE, UiKit.TITLE_COLOR)
 	column.add_child(_reward)
-	_weight = UiKit.label("", UiKit.CELL_FONT_SIZE, UiKit.TEXT_COLOR)
+	_weight = _fixed_label(UiKit.CELL_FONT_SIZE, UiKit.TEXT_COLOR)
 	column.add_child(_weight)
-	_action = UiKit.label("", UiKit.HINT_FONT_SIZE, UiKit.HINT_COLOR)
-	_action.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	column.add_child(_action)
-	_send = UiKit.action_button("▶", CARD_WIDTH - 20.0)
+
+	_send = UiKit.action_button("▶", INNER_WIDTH)
+	_send.custom_minimum_size = Vector2(INNER_WIDTH, BUTTON_HEIGHT)
+	_send.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_send.pressed.connect(_on_send)
 	column.add_child(_send)
 
@@ -61,27 +67,32 @@ func refresh(rover: Rover, distance_deg: float) -> void:
 	_timer.value = order.lifetime_ratio()
 	var expired: bool = order.time_left <= 0.0
 	var too_heavy: bool = not rover.can_carry(order.cargo)
-	_send.visible = not too_heavy and not expired
+
 	if expired:
-		_action.visible = true
-		_action.text = "истекло"
-		_action.add_theme_color_override("font_color", UiKit.WARN_COLOR)
-		_send.disabled = true
-		return
-	if too_heavy:
-		_action.visible = true
-		_action.text = "вес"
-		_action.add_theme_color_override("font_color", UiKit.WARN_COLOR)
-		return
-	_action.add_theme_color_override("font_color", UiKit.HINT_COLOR)
-	var wait: float = rover.wait_until_start(distance_deg)
-	if wait > 0.05:
-		_action.visible = true
-		_action.text = "%.1f с" % wait
-		_send.disabled = true
+		_set_button("истекло", UiKit.WARN_COLOR, false)
+	elif too_heavy:
+		_set_button("вес", UiKit.WARN_COLOR, false)
 	else:
-		_action.visible = false
-		_send.disabled = false
+		var wait: float = rover.wait_until_start(distance_deg)
+		if wait > 0.05:
+			_set_button("%.1f с" % wait, UiKit.HINT_COLOR, false)
+		else:
+			_set_button("▶", UiKit.TEXT_COLOR, true)
+
+
+func _set_button(text: String, color: Color, can_send: bool) -> void:
+	_send.text = text
+	_send.disabled = not can_send
+	_send.add_theme_color_override("font_color", color)
+	_send.add_theme_color_override("font_disabled_color", color)
+	_send.modulate = Color.WHITE
+
+
+func _fixed_label(font_size: int, color: Color) -> Label:
+	var label: Label = UiKit.label("", font_size, color)
+	label.custom_minimum_size = Vector2(INNER_WIDTH, font_size + 4.0)
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	return label
 
 
 func _on_send() -> void:

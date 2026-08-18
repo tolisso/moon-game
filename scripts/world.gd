@@ -281,13 +281,13 @@ func _refresh_selection_visuals() -> void:
 func _place_popup(popup: OrderPopup) -> void:
 	var world_pos: Vector3 = _order_popup_world(popup.order)
 	if not _is_front_facing(world_pos):
-		popup.visible = false
+		popup.modulate.a = 0.0
+		popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		return
-	popup.visible = true
+	popup.modulate.a = 1.0
+	popup.mouse_filter = Control.MOUSE_FILTER_STOP
 	var screen: Vector2 = _camera.unproject_position(world_pos)
-	var card_size: Vector2 = popup.size
-	if card_size.x < 1.0 or card_size.y < 1.0:
-		card_size = popup.get_combined_minimum_size()
+	var card_size: Vector2 = Vector2(OrderPopup.CARD_WIDTH, OrderPopup.CARD_HEIGHT)
 	popup.position = screen - Vector2(card_size.x * 0.5, card_size.y + 8.0)
 
 
