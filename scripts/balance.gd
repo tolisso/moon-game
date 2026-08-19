@@ -71,8 +71,8 @@ static func recharge_time(missing_energy: float) -> float:
 	return missing_energy / RECHARGE_PER_SEC
 
 
-static func delivery_reward(_distance_deg: float, weight: float) -> int:
-	return maxi(int(weight), 0)
+static func delivery_reward(distance_tier: int, weight: float) -> int:
+	return clampi(distance_tier, STAT_MIN, STAT_MAX) * maxi(int(weight), 0)
 
 
 static func upgrade_cost(level: int) -> int:
@@ -83,3 +83,18 @@ static func upgrade_cost(level: int) -> int:
 ## Slider tiers 1..6 map to spawn distance the same way rover energy does.
 static func distance_deg_for_tier(tier: int) -> float:
 	return float(clampi(tier, STAT_MIN, STAT_MAX)) * RANGE_PER_ENERGY
+
+
+static func distance_tier_for_deg(distance_deg: float) -> int:
+	return clampi(ceili(distance_deg / RANGE_PER_ENERGY - 0.00001), STAT_MIN, STAT_MAX)
+
+
+static func random_distance_deg_for_tier(tier: int) -> float:
+	var clamped: int = clampi(tier, STAT_MIN, STAT_MAX)
+	var hi: float = float(clamped) * RANGE_PER_ENERGY
+	var lo: float = float(clamped - 1) * RANGE_PER_ENERGY
+	if clamped == STAT_MIN:
+		lo = ORDER_MIN_DISTANCE_DEG
+	else:
+		lo += 0.05
+	return randf_range(lo, hi)

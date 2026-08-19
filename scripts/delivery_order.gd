@@ -16,6 +16,7 @@ const DOT_OFFSET: float = 1.0036
 
 var geo: GeoCoord = GeoCoord.new()
 var cargo: float = 1.0
+var distance_tier: int = Balance.STAT_MIN
 var assigned: bool = false
 var time_left: float = Balance.ORDER_LIFETIME
 var created_at: float = 0.0
@@ -86,6 +87,10 @@ func is_expired() -> bool:
 
 func lifetime_ratio() -> float:
 	return clampf(time_left / Balance.ORDER_LIFETIME, 0.0, 1.0)
+
+
+func gold_reward() -> int:
+	return Balance.delivery_reward(distance_tier, cargo)
 
 
 func _add(piece: MeshInstance3D) -> void:

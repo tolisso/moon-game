@@ -221,15 +221,16 @@ func _remove_order(order: DeliveryOrder) -> void:
 
 
 func _spawn_order() -> void:
-	var max_dist: float = Balance.distance_deg_for_tier(_difficulty)
-	var min_dist: float = minf(Balance.ORDER_MIN_DISTANCE_DEG, max_dist)
+	var distance_tier: int = randi_range(Balance.STAT_MIN, _difficulty)
+	var weight: int = randi_range(Balance.ORDER_WEIGHT_MIN, _difficulty)
 	var order: DeliveryOrder = DeliveryOrder.new()
 	_orders_root.add_child(order)
 	order.setup(
 		PLANET_RADIUS,
-		_geo_away_from_base(randf_range(min_dist, max_dist)),
-		float(randi_range(Balance.ORDER_WEIGHT_MIN, _difficulty))
+		_geo_away_from_base(Balance.random_distance_deg_for_tier(distance_tier)),
+		float(weight)
 	)
+	order.distance_tier = distance_tier
 	_orders.append(order)
 	if _selected != null:
 		_rebuild_popups()
@@ -338,7 +339,7 @@ func _try_dispatch(rover: Rover, order: DeliveryOrder) -> void:
 
 
 func _on_delivered(order: DeliveryOrder) -> void:
-	var reward: int = Balance.delivery_reward(_base.geo.arc_to_deg(order.geo), order.cargo)
+	var reward: int = order.gold_reward()
 	_gold += reward
 	_gold_earned += reward
 	_refresh_gold()
@@ -600,6 +601,7 @@ func _apply_snapshot(snapshot: Dictionary) -> void:
 		)
 		if int(order_row.get("assigned", 0)) != 0:
 			order.set_assigned(true)
+		order.distance_tier = Balance.distance_tier_for_deg(_base.geo.arc_to_deg(order.geo))
 		_orders.append(order)
 		orders_by_id[int(order_row.get("id", -1))] = order
 	var rover_rows: Array = snapshot.get("rovers", [])

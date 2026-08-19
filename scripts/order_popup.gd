@@ -72,8 +72,8 @@ func _ready() -> void:
 
 func setup(target: DeliveryOrder) -> void:
 	order = target
-	_reward.text = "%d золото" % Balance.delivery_reward(0.0, target.cargo)
-	_weight.text = "вес %d" % int(target.cargo)
+	_reward.text = "%d золото" % target.gold_reward()
+	_weight.text = "д %d × вес %d" % [target.distance_tier, int(target.cargo)]
 	_timer.value = target.lifetime_ratio()
 
 
