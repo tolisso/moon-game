@@ -1,6 +1,6 @@
-extends Node3D
+extends Control
 
-## Game root: planet, camera, fleet, orders, gold, rover selection.
+## Game root: left UI pane and a right 3D viewport, plus fleet and orders.
 ## Gameplay numbers live in `balance.gd`.
 
 const PLANET_RADIUS: float = 1.0
@@ -13,27 +13,27 @@ const CAMERA_ZOOM_STEP: float = 0.2
 const BASE_GEO_LAT: float = 90.0
 const BASE_GEO_LON: float = 0.0
 const POPUP_LIFT: float = 0.12
-const LEFT_PANEL_WIDTH: float = 340.0
 const NUMBER_KEYS: Array[int] = [KEY_1, KEY_2, KEY_3]
 const NUMBER_KEYS_PAD: Array[int] = [KEY_KP_1, KEY_KP_2, KEY_KP_3]
 
-@onready var _planet_pivot: Node3D = $PlanetPivot
-@onready var _graticule: Graticule = $PlanetPivot/Graticule
-@onready var _craters: Craters = $PlanetPivot/Craters
-@onready var _base: BaseStation = $PlanetPivot/Base
-@onready var _rovers_root: Node3D = $PlanetPivot/Rovers
-@onready var _paths_root: Node3D = $PlanetPivot/Paths
-@onready var _orders_root: Node3D = $PlanetPivot/Orders
-@onready var _range_view: RangeView = $PlanetPivot/RangeView
-@onready var _camera: Camera3D = $Camera3D
-@onready var _left_panel: PanelContainer = $UI/LeftPanel
-@onready var _gold_label: Label = $UI/LeftPanel/Margin/Column/GoldLabel
-@onready var _fleet_host: VBoxContainer = $UI/LeftPanel/Margin/Column/Fleet
-@onready var _popups_root: Control = $UI/OrderPopups
-@onready var _distance_slider: HSlider = $UI/LeftPanel/Margin/Column/SpawnSettings/DistanceRow/DistanceSlider
-@onready var _distance_value: Label = $UI/LeftPanel/Margin/Column/SpawnSettings/DistanceRow/DistanceValue
-@onready var _weight_slider: HSlider = $UI/LeftPanel/Margin/Column/SpawnSettings/WeightRow/WeightSlider
-@onready var _weight_value: Label = $UI/LeftPanel/Margin/Column/SpawnSettings/WeightRow/WeightValue
+@onready var _planet_pivot: Node3D = %PlanetPivot
+@onready var _graticule: Graticule = %PlanetPivot/Graticule
+@onready var _craters: Craters = %PlanetPivot/Craters
+@onready var _base: BaseStation = %PlanetPivot/Base
+@onready var _rovers_root: Node3D = %PlanetPivot/Rovers
+@onready var _paths_root: Node3D = %PlanetPivot/Paths
+@onready var _orders_root: Node3D = %PlanetPivot/Orders
+@onready var _range_view: RangeView = %PlanetPivot/RangeView
+@onready var _camera: Camera3D = %Camera3D
+@onready var _world_view: SubViewportContainer = %WorldView
+@onready var _left_panel: PanelContainer = %LeftPanel
+@onready var _gold_label: Label = %GoldLabel
+@onready var _fleet_host: VBoxContainer = %Fleet
+@onready var _popups_root: Control = %OrderPopups
+@onready var _distance_slider: HSlider = %DistanceSlider
+@onready var _distance_value: Label = %DistanceValue
+@onready var _weight_slider: HSlider = %WeightSlider
+@onready var _weight_value: Label = %WeightValue
 
 ## Pitch is clamped to ±85°; start at the top so the north-pole base faces us.
 var _yaw_deg: float = 0.0
@@ -58,11 +58,12 @@ func _ready() -> void:
 	_range_view.setup(PLANET_RADIUS)
 	_range_view.build_contours(_base.geo, _craters)
 	_style_left_panel()
+	_style_right_pane()
 	_setup_spawn_sliders()
 	_spawn_fleet()
 	_apply_planet_rotation()
-	get_viewport().size_changed.connect(_apply_camera_distance)
 	_apply_camera_distance()
+	_world_view.gui_input.connect(_on_world_gui_input)
 	_refresh_gold()
 	_refresh_fleet_cards()
 	for i in Balance.START_ORDERS:
@@ -116,6 +117,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			_select_rover(null)
 			return
 
+func _on_world_gui_input(event: InputEvent) -> void:
 	var button := event as InputEventMouseButton
 	if button == null or not button.pressed:
 		return
@@ -366,17 +368,7 @@ func _apply_planet_rotation() -> void:
 
 
 func _apply_camera_distance() -> void:
-	var view: Vector2 = get_viewport().get_visible_rect().size
-	_camera.position.z = _camera_distance
-	if view.x <= 1.0 or view.y <= 1.0:
-		_camera.position.x = 0.0
-		return
-	var playfield_center: float = LEFT_PANEL_WIDTH + (view.x - LEFT_PANEL_WIDTH) * 0.5
-	var shift_px: float = playfield_center - view.x * 0.5
-	var half_vertical: float = tan(deg_to_rad(_camera.fov * 0.5)) * _camera_distance
-	var half_horizontal: float = half_vertical * (view.x / view.y)
-	_camera.position.x = -shift_px / (view.x * 0.5) * half_horizontal
-	_camera.position.y = 0.0
+	_camera.position = Vector3(0.0, 0.0, _camera_distance)
 
 
 func _refresh_paths() -> void:
@@ -386,7 +378,11 @@ func _refresh_paths() -> void:
 
 func _style_left_panel() -> void:
 	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = Color(0.035, 0.045, 0.07, 0.96)
-	style.border_color = Color(0.28, 0.4, 0.55, 0.7)
+	style.bg_color = Color(0.035, 0.045, 0.07, 1.0)
+	style.border_color = Color(0.28, 0.4, 0.55, 0.85)
 	style.border_width_right = 1
 	_left_panel.add_theme_stylebox_override("panel", style)
+
+
+func _style_right_pane() -> void:
+	_world_view.mouse_filter = Control.MOUSE_FILTER_STOP
