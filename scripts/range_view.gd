@@ -5,7 +5,7 @@ extends Node3D
 ## old circular range, so the meshes are built once at startup and then only
 ## toggled visible.
 
-const RING_OFFSET: float = 1.003
+const RING_OFFSET: float = 1.012
 const RING_WIDTH_RATIO: float = 0.01
 const MAX_VISIBLE_DEG: float = 179.0
 const RAYS: int = 96
@@ -36,6 +36,9 @@ func build_contours(centre: GeoCoord, craters: Craters) -> void:
 		var ring: MeshInstance3D = SphereShapes.closed_ribbon(
 			points, _planet_radius, RING_OFFSET, width, RING_COLOR
 		)
+		var material: StandardMaterial3D = ring.material_override as StandardMaterial3D
+		if material != null:
+			material.render_priority = 1
 		ring.visible = false
 		add_child(ring)
 		_rings.append(ring)

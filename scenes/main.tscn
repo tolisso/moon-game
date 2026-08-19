@@ -33,7 +33,7 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_world")
 
-[node name="Split" type="HBoxContainer" parent="."]
+[node name="Layout" type="VBoxContainer" parent="."]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -42,107 +42,83 @@ grow_horizontal = 2
 grow_vertical = 2
 theme_override_constants/separation = 0
 
-[node name="LeftPanel" type="PanelContainer" parent="Split"]
+[node name="TopBar" type="PanelContainer" parent="Layout"]
+layout_mode = 2
+
+[node name="TimerLabel" type="Label" parent="Layout/TopBar"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.85, 0.5, 1)
+theme_override_font_sizes/font_size = 26
+horizontal_alignment = 1
+text = "1:30"
+
+[node name="Split" type="HBoxContainer" parent="Layout"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 0
+
+[node name="LeftPanel" type="PanelContainer" parent="Layout/Split"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(340, 0)
 layout_mode = 2
 
-[node name="Margin" type="MarginContainer" parent="Split/LeftPanel"]
+[node name="Margin" type="MarginContainer" parent="Layout/Split/LeftPanel"]
 layout_mode = 2
 theme_override_constants/margin_left = 14
 theme_override_constants/margin_top = 14
 theme_override_constants/margin_right = 14
 theme_override_constants/margin_bottom = 14
 
-[node name="Column" type="VBoxContainer" parent="Split/LeftPanel/Margin"]
+[node name="Column" type="VBoxContainer" parent="Layout/Split/LeftPanel/Margin"]
 layout_mode = 2
 theme_override_constants/separation = 12
 
-[node name="GoldLabel" type="Label" parent="Split/LeftPanel/Margin/Column"]
+[node name="GoldLabel" type="Label" parent="Layout/Split/LeftPanel/Margin/Column"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.85, 0.5, 1)
 theme_override_font_sizes/font_size = 20
 text = "Золото: 0"
 
-[node name="Fleet" type="VBoxContainer" parent="Split/LeftPanel/Margin/Column"]
+[node name="Fleet" type="VBoxContainer" parent="Layout/Split/LeftPanel/Margin/Column"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="Spacer" type="Control" parent="Split/LeftPanel/Margin/Column"]
+[node name="Spacer" type="Control" parent="Layout/Split/LeftPanel/Margin/Column"]
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="SpawnSettings" type="VBoxContainer" parent="Split/LeftPanel/Margin/Column"]
+[node name="SpawnSettings" type="VBoxContainer" parent="Layout/Split/LeftPanel/Margin/Column"]
 layout_mode = 2
-theme_override_constants/separation = 4
+theme_override_constants/separation = 6
 
-[node name="DistanceRow" type="HBoxContainer" parent="Split/LeftPanel/Margin/Column/SpawnSettings"]
-layout_mode = 2
-theme_override_constants/separation = 8
-
-[node name="DistanceLabel" type="Label" parent="Split/LeftPanel/Margin/Column/SpawnSettings/DistanceRow"]
-custom_minimum_size = Vector2(110, 0)
+[node name="DifficultyLabel" type="Label" parent="Layout/Split/LeftPanel/Margin/Column/SpawnSettings"]
+unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.87, 0.92, 1, 1)
 theme_override_font_sizes/font_size = 14
-text = "Макс. дистанция"
+autowrap_mode = 3
+text = "Сложность: 3 (max вес и дальность)"
 
-[node name="DistanceSlider" type="HSlider" parent="Split/LeftPanel/Margin/Column/SpawnSettings/DistanceRow"]
+[node name="DifficultySlider" type="HSlider" parent="Layout/Split/LeftPanel/Margin/Column/SpawnSettings"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(80, 0)
+custom_minimum_size = Vector2(0, 18)
 layout_mode = 2
-size_flags_horizontal = 3
 focus_mode = 0
 min_value = 1.0
 max_value = 6.0
+step = 1.0
 value = 3.0
 
-[node name="DistanceValue" type="Label" parent="Split/LeftPanel/Margin/Column/SpawnSettings/DistanceRow"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(20, 0)
-layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.85, 0.5, 1)
-theme_override_font_sizes/font_size = 14
-text = "3"
-
-[node name="WeightRow" type="HBoxContainer" parent="Split/LeftPanel/Margin/Column/SpawnSettings"]
-layout_mode = 2
-theme_override_constants/separation = 8
-
-[node name="WeightLabel" type="Label" parent="Split/LeftPanel/Margin/Column/SpawnSettings/WeightRow"]
-custom_minimum_size = Vector2(110, 0)
-layout_mode = 2
-theme_override_colors/font_color = Color(0.87, 0.92, 1, 1)
-theme_override_font_sizes/font_size = 14
-text = "Макс. вес"
-
-[node name="WeightSlider" type="HSlider" parent="Split/LeftPanel/Margin/Column/SpawnSettings/WeightRow"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(80, 0)
-layout_mode = 2
-size_flags_horizontal = 3
-focus_mode = 0
-min_value = 1.0
-max_value = 6.0
-value = 3.0
-
-[node name="WeightValue" type="Label" parent="Split/LeftPanel/Margin/Column/SpawnSettings/WeightRow"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(20, 0)
-layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.85, 0.5, 1)
-theme_override_font_sizes/font_size = 14
-text = "3"
-
-[node name="RightPane" type="Control" parent="Split"]
+[node name="RightPane" type="Control" parent="Layout/Split"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 
-[node name="WorldView" type="SubViewportContainer" parent="Split/RightPane"]
+[node name="WorldView" type="SubViewportContainer" parent="Layout/Split/RightPane"]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
@@ -152,51 +128,51 @@ grow_horizontal = 2
 grow_vertical = 2
 stretch = true
 
-[node name="SubViewport" type="SubViewport" parent="Split/RightPane/WorldView"]
+[node name="SubViewport" type="SubViewport" parent="Layout/Split/RightPane/WorldView"]
 own_world_3d = true
 handle_input_locally = false
 size = Vector2i(940, 720)
 render_target_update_mode = 4
 msaa_3d = 2
 
-[node name="WorldEnvironment" type="WorldEnvironment" parent="Split/RightPane/WorldView/SubViewport"]
+[node name="WorldEnvironment" type="WorldEnvironment" parent="Layout/Split/RightPane/WorldView/SubViewport"]
 environment = SubResource("Environment_space")
 
-[node name="DirectionalLight3D" type="DirectionalLight3D" parent="Split/RightPane/WorldView/SubViewport"]
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="Layout/Split/RightPane/WorldView/SubViewport"]
 transform = Transform3D(0.766, 0, -0.643, -0.413, 0.766, -0.493, 0.493, 0.643, 0.587, 2, 3, 3)
 light_energy = 1.1
 
-[node name="Camera3D" type="Camera3D" parent="Split/RightPane/WorldView/SubViewport"]
+[node name="Camera3D" type="Camera3D" parent="Layout/Split/RightPane/WorldView/SubViewport"]
 unique_name_in_owner = true
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 3)
 fov = 45.0
 
-[node name="PlanetPivot" type="Node3D" parent="Split/RightPane/WorldView/SubViewport"]
+[node name="PlanetPivot" type="Node3D" parent="Layout/Split/RightPane/WorldView/SubViewport"]
 unique_name_in_owner = true
 
-[node name="PlanetMesh" type="MeshInstance3D" parent="Split/RightPane/WorldView/SubViewport/PlanetPivot"]
+[node name="PlanetMesh" type="MeshInstance3D" parent="Layout/Split/RightPane/WorldView/SubViewport/PlanetPivot"]
 material_override = SubResource("StandardMaterial3D_planet")
 mesh = SubResource("SphereMesh_planet")
 
-[node name="Graticule" type="MeshInstance3D" parent="Split/RightPane/WorldView/SubViewport/PlanetPivot"]
+[node name="Graticule" type="MeshInstance3D" parent="Layout/Split/RightPane/WorldView/SubViewport/PlanetPivot"]
 script = ExtResource("2_graticule")
 
-[node name="Craters" type="Node3D" parent="Split/RightPane/WorldView/SubViewport/PlanetPivot"]
+[node name="Craters" type="Node3D" parent="Layout/Split/RightPane/WorldView/SubViewport/PlanetPivot"]
 script = ExtResource("7_craters")
 
-[node name="Base" type="Node3D" parent="Split/RightPane/WorldView/SubViewport/PlanetPivot"]
+[node name="Base" type="Node3D" parent="Layout/Split/RightPane/WorldView/SubViewport/PlanetPivot"]
 script = ExtResource("3_base")
 
-[node name="RangeView" type="Node3D" parent="Split/RightPane/WorldView/SubViewport/PlanetPivot"]
+[node name="RangeView" type="Node3D" parent="Layout/Split/RightPane/WorldView/SubViewport/PlanetPivot"]
 script = ExtResource("6_range")
 
-[node name="Paths" type="Node3D" parent="Split/RightPane/WorldView/SubViewport/PlanetPivot"]
+[node name="Paths" type="Node3D" parent="Layout/Split/RightPane/WorldView/SubViewport/PlanetPivot"]
 
-[node name="Rovers" type="Node3D" parent="Split/RightPane/WorldView/SubViewport/PlanetPivot"]
+[node name="Rovers" type="Node3D" parent="Layout/Split/RightPane/WorldView/SubViewport/PlanetPivot"]
 
-[node name="Orders" type="Node3D" parent="Split/RightPane/WorldView/SubViewport/PlanetPivot"]
+[node name="Orders" type="Node3D" parent="Layout/Split/RightPane/WorldView/SubViewport/PlanetPivot"]
 
-[node name="OrderPopups" type="Control" parent="Split/RightPane"]
+[node name="OrderPopups" type="Control" parent="Layout/Split/RightPane"]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15

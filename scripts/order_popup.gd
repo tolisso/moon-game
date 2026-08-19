@@ -2,7 +2,7 @@ class_name OrderPopup
 extends PanelContainer
 
 ## Compact 2D card pinned above a delivery marker in screen space.
-## Every row has a fixed slot so refresh never changes size or shifts siblings.
+## The whole card is the click target; the old send button is a visual slot.
 
 signal send_pressed(order: DeliveryOrder)
 
@@ -18,21 +18,29 @@ var order: DeliveryOrder = null
 var _timer: ProgressBar = null
 var _reward: Label = null
 var _weight: Label = null
-var _send: Button = null
+var _action: PanelContainer = null
+var _action_label: Label = null
+var _can_send: bool = false
+var _idle_style: StyleBoxFlat = null
+var _hover_style: StyleBoxFlat = null
 
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	custom_minimum_size = Vector2(CARD_WIDTH, CARD_HEIGHT)
 	size = Vector2(CARD_WIDTH, CARD_HEIGHT)
-	add_theme_stylebox_override("panel", _style())
+	_idle_style = _card_style(false)
+	_hover_style = _card_style(true)
+	add_theme_stylebox_override("panel", _idle_style)
 
 	var column: VBoxContainer = VBoxContainer.new()
+	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	column.custom_minimum_size = Vector2(INNER_WIDTH, CARD_HEIGHT - 16.0)
 	column.add_theme_constant_override("separation", 4)
 	add_child(column)
 
 	_timer = ProgressBar.new()
+	_timer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_timer.custom_minimum_size = Vector2(INNER_WIDTH, TIMER_HEIGHT)
 	_timer.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_timer.max_value = 1.0
@@ -47,11 +55,19 @@ func _ready() -> void:
 	_weight = _fixed_label(UiKit.CELL_FONT_SIZE, UiKit.TEXT_COLOR)
 	column.add_child(_weight)
 
-	_send = UiKit.action_button("▶", INNER_WIDTH)
-	_send.custom_minimum_size = Vector2(INNER_WIDTH, BUTTON_HEIGHT)
-	_send.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_send.pressed.connect(_on_send)
-	column.add_child(_send)
+	_action = PanelContainer.new()
+	_action.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_action.custom_minimum_size = Vector2(INNER_WIDTH, BUTTON_HEIGHT)
+	_action.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_action.add_theme_stylebox_override("panel", _action_style())
+	column.add_child(_action)
+
+	_action_label = Label.new()
+	_action_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_action_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_action_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_action_label.add_theme_font_size_override("font_size", UiKit.CELL_FONT_SIZE)
+	_action.add_child(_action_label)
 
 
 func setup(target: DeliveryOrder) -> void:
@@ -69,49 +85,86 @@ func refresh(rover: Rover) -> void:
 	var too_heavy: bool = not rover.can_carry(order.cargo)
 
 	if expired:
-		_set_button("истекло", UiKit.WARN_COLOR, false)
+		_set_action("истекло", UiKit.WARN_COLOR, false)
 	elif too_heavy:
-		_set_button("вес", UiKit.WARN_COLOR, false)
+		_set_action("вес", UiKit.WARN_COLOR, false)
 	else:
 		var wait: float = rover.wait_until_start(order.geo)
 		if wait > 0.05:
-			_set_button("%.1f с" % wait, UiKit.HINT_COLOR, false)
+			_set_action("%.1f с" % wait, UiKit.HINT_COLOR, false)
 		else:
-			_set_button("▶", UiKit.TEXT_COLOR, true)
+			_set_action("▶", UiKit.TEXT_COLOR, true)
 
 
-func _set_button(text: String, color: Color, can_send: bool) -> void:
-	_send.text = text
-	_send.disabled = not can_send
-	_send.add_theme_color_override("font_color", color)
-	_send.add_theme_color_override("font_disabled_color", color)
-	_send.modulate = Color.WHITE
+func _set_action(text: String, color: Color, can_send: bool) -> void:
+	_can_send = can_send
+	_action_label.text = text
+	_action_label.add_theme_color_override("font_color", color)
 
 
 func _fixed_label(font_size: int, color: Color) -> Label:
-	var label: Label = UiKit.label("", font_size, color)
-	label.custom_minimum_size = Vector2(INNER_WIDTH, font_size + 4.0)
-	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	return label
-
-
-func _on_send() -> void:
-	if order != null:
-		send_pressed.emit(order)
+	var item: Label = UiKit.label("", font_size, color)
+	item.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	item.custom_minimum_size = Vector2(INNER_WIDTH, font_size + 4.0)
+	item.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	return item
 
 
 func _gui_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton:
-		accept_event()
+	var button := event as InputEventMouseButton
+	if button == null:
+		return
+	accept_event()
+	if not button.pressed or button.button_index != MOUSE_BUTTON_LEFT:
+		return
+	if _can_send and order != null:
+		send_pressed.emit(order)
 
 
-func _style() -> StyleBoxFlat:
+func update_hover() -> void:
+	if _idle_style == null or _hover_style == null:
+		return
+	var hovered: bool = (
+		_can_send
+		and mouse_filter != Control.MOUSE_FILTER_IGNORE
+		and _is_top_hovered()
+	)
+	add_theme_stylebox_override("panel", _hover_style if hovered else _idle_style)
+
+
+func _is_top_hovered() -> bool:
+	var hovered: Control = get_viewport().gui_get_hovered_control()
+	var node: Node = hovered
+	while node != null:
+		if node == self:
+			return true
+		node = node.get_parent()
+	return false
+
+
+func _card_style(hovered: bool) -> StyleBoxFlat:
 	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = Color(0.05, 0.07, 0.11, 0.94)
-	style.border_color = Color(0.35, 0.62, 0.9, 0.8)
-	style.set_border_width_all(1)
+	if hovered:
+		style.bg_color = Color(0.1, 0.16, 0.26, 0.97)
+		style.border_color = Color(0.6, 0.85, 1.0, 1.0)
+		style.set_border_width_all(2)
+	else:
+		style.bg_color = Color(0.05, 0.07, 0.11, 0.94)
+		style.border_color = Color(0.35, 0.62, 0.9, 0.8)
+		style.set_border_width_all(1)
 	style.set_corner_radius_all(5)
 	style.set_content_margin_all(8.0)
+	return style
+
+
+func _action_style() -> StyleBoxFlat:
+	var style: StyleBoxFlat = StyleBoxFlat.new()
+	style.bg_color = Color(0.05, 0.07, 0.11, 0.0)
+	style.set_border_width_all(0)
+	style.content_margin_left = 6.0
+	style.content_margin_right = 6.0
+	style.content_margin_top = 4.0
+	style.content_margin_bottom = 4.0
 	return style
 
 

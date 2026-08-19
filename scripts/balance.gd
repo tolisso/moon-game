@@ -50,6 +50,7 @@ const ORDER_WEIGHT_MIN: int = 1
 # --- Gold ---
 
 const START_GOLD: int = 0
+const ROUND_DURATION_SEC: float = 90.0
 
 
 static func range_deg(energy: float) -> float:

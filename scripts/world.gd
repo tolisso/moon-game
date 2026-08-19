@@ -15,6 +15,14 @@ const BASE_GEO_LON: float = 0.0
 const POPUP_LIFT: float = 0.12
 const NUMBER_KEYS: Array[int] = [KEY_1, KEY_2, KEY_3]
 const NUMBER_KEYS_PAD: Array[int] = [KEY_KP_1, KEY_KP_2, KEY_KP_3]
+const DIFFICULTY_COLORS: Array[Color] = [
+	Color(0.32, 0.82, 0.28),
+	Color(0.72, 0.88, 0.18),
+	Color(0.96, 0.82, 0.16),
+	Color(1.0, 0.52, 0.14),
+	Color(0.88, 0.18, 0.14),
+	Color(0.5, 0.08, 0.16),
+]
 
 @onready var _planet_pivot: Node3D = %PlanetPivot
 @onready var _graticule: Graticule = %PlanetPivot/Graticule
@@ -28,18 +36,22 @@ const NUMBER_KEYS_PAD: Array[int] = [KEY_KP_1, KEY_KP_2, KEY_KP_3]
 @onready var _world_view: SubViewportContainer = %WorldView
 @onready var _left_panel: PanelContainer = %LeftPanel
 @onready var _gold_label: Label = %GoldLabel
+@onready var _timer_label: Label = %TimerLabel
 @onready var _fleet_host: VBoxContainer = %Fleet
 @onready var _popups_root: Control = %OrderPopups
-@onready var _distance_slider: HSlider = %DistanceSlider
-@onready var _distance_value: Label = %DistanceValue
-@onready var _weight_slider: HSlider = %WeightSlider
-@onready var _weight_value: Label = %WeightValue
+@onready var _difficulty_slider: HSlider = %DifficultySlider
+@onready var _difficulty_label: Label = %DifficultyLabel
 
 ## Pitch is clamped to ±85°; start at the top so the north-pole base faces us.
 var _yaw_deg: float = 0.0
 var _pitch_deg: float = MAX_PITCH_DEG
 var _camera_distance: float = 3.0
 var _gold: int = Balance.START_GOLD
+var _gold_earned: int = 0
+var _round_left: float = Balance.ROUND_DURATION_SEC
+var _round_over: bool = false
+var _score_overlay: Control = null
+var _score_label: Label = null
 var _rovers: Array[Rover] = []
 var _cards: Array[RoverCard] = []
 var _paths: Array[PathView] = []
@@ -47,8 +59,7 @@ var _orders: Array[DeliveryOrder] = []
 var _popups: Array[OrderPopup] = []
 var _next_order_in: float = 0.0
 var _selected: Rover = null
-var _spawn_max_distance_tier: int = 3
-var _spawn_max_weight_tier: int = 3
+var _difficulty: int = 3
 
 
 func _ready() -> void:
@@ -59,47 +70,47 @@ func _ready() -> void:
 	_range_view.build_contours(_base.geo, _craters)
 	_style_left_panel()
 	_style_right_pane()
-	_setup_spawn_sliders()
+	_style_top_bar()
+	_setup_difficulty_slider()
+	_build_score_overlay()
 	_spawn_fleet()
 	_apply_planet_rotation()
 	_apply_camera_distance()
 	_world_view.gui_input.connect(_on_world_gui_input)
 	_refresh_gold()
+	_refresh_timer()
 	_refresh_fleet_cards()
 	for i in Balance.START_ORDERS:
 		_spawn_order()
 	_next_order_in = Balance.ORDER_SPAWN_INTERVAL
 
 
-func _setup_spawn_sliders() -> void:
-	for slider in [_distance_slider, _weight_slider]:
-		slider.min_value = Balance.STAT_MIN
-		slider.max_value = Balance.STAT_MAX
-		slider.step = 1.0
-		slider.focus_mode = Control.FOCUS_NONE
-	_distance_slider.value = _spawn_max_distance_tier
-	_weight_slider.value = _spawn_max_weight_tier
-	_distance_slider.value_changed.connect(_on_distance_tier_changed)
-	_weight_slider.value_changed.connect(_on_weight_tier_changed)
-	_refresh_spawn_labels()
+func _setup_difficulty_slider() -> void:
+	_difficulty_slider.min_value = Balance.STAT_MIN
+	_difficulty_slider.max_value = Balance.STAT_MAX
+	_difficulty_slider.step = 1.0
+	_difficulty_slider.focus_mode = Control.FOCUS_NONE
+	_difficulty_slider.value = _difficulty
+	_difficulty_slider.value_changed.connect(_on_difficulty_changed)
+	_style_difficulty_slider()
+	_refresh_difficulty_label()
 
 
-func _on_distance_tier_changed(value: float) -> void:
-	_spawn_max_distance_tier = int(value)
-	_refresh_spawn_labels()
+func _on_difficulty_changed(value: float) -> void:
+	_difficulty = int(value)
+	_refresh_difficulty_label()
+	_style_difficulty_slider()
 
 
-func _on_weight_tier_changed(value: float) -> void:
-	_spawn_max_weight_tier = int(value)
-	_refresh_spawn_labels()
-
-
-func _refresh_spawn_labels() -> void:
-	_distance_value.text = str(_spawn_max_distance_tier)
-	_weight_value.text = str(_spawn_max_weight_tier)
+func _refresh_difficulty_label() -> void:
+	_difficulty_label.text = "Сложность: %d (max вес и дальность)" % _difficulty
+	_difficulty_label.add_theme_color_override("font_color", _difficulty_color())
 
 
 func _process(delta: float) -> void:
+	if _round_over:
+		return
+	_tick_round(delta)
 	_handle_rotation(delta)
 	_tick_orders(delta)
 	_handle_order_spawning(delta)
@@ -201,14 +212,14 @@ func _remove_order(order: DeliveryOrder) -> void:
 
 
 func _spawn_order() -> void:
-	var max_dist: float = Balance.distance_deg_for_tier(_spawn_max_distance_tier)
+	var max_dist: float = Balance.distance_deg_for_tier(_difficulty)
 	var min_dist: float = minf(Balance.ORDER_MIN_DISTANCE_DEG, max_dist)
 	var order: DeliveryOrder = DeliveryOrder.new()
 	_orders_root.add_child(order)
 	order.setup(
 		PLANET_RADIUS,
 		_geo_away_from_base(randf_range(min_dist, max_dist)),
-		float(randi_range(Balance.ORDER_WEIGHT_MIN, _spawn_max_weight_tier))
+		float(randi_range(Balance.ORDER_WEIGHT_MIN, _difficulty))
 	)
 	_orders.append(order)
 	if _selected != null:
@@ -275,6 +286,7 @@ func _refresh_selection_visuals() -> void:
 			continue
 		popup.refresh(_selected)
 		_place_popup(popup)
+		popup.update_hover()
 		surviving.append(popup)
 	_popups = surviving
 
@@ -317,7 +329,9 @@ func _try_dispatch(rover: Rover, order: DeliveryOrder) -> void:
 
 
 func _on_delivered(order: DeliveryOrder) -> void:
-	_gold += Balance.delivery_reward(_base.geo.arc_to_deg(order.geo), order.cargo)
+	var reward: int = Balance.delivery_reward(_base.geo.arc_to_deg(order.geo), order.cargo)
+	_gold += reward
+	_gold_earned += reward
 	_refresh_gold()
 	_remove_order(order)
 
@@ -386,3 +400,75 @@ func _style_left_panel() -> void:
 
 func _style_right_pane() -> void:
 	_world_view.mouse_filter = Control.MOUSE_FILTER_STOP
+
+
+func _style_top_bar() -> void:
+	var style: StyleBoxFlat = StyleBoxFlat.new()
+	style.bg_color = Color(0.035, 0.045, 0.07, 1.0)
+	style.border_color = Color(0.28, 0.4, 0.55, 0.85)
+	style.border_width_bottom = 1
+	style.content_margin_top = 8.0
+	style.content_margin_bottom = 8.0
+	$Layout/TopBar.add_theme_stylebox_override("panel", style)
+
+
+func _style_difficulty_slider() -> void:
+	var color: Color = _difficulty_color()
+	var fill: StyleBoxFlat = StyleBoxFlat.new()
+	fill.bg_color = color
+	fill.set_corner_radius_all(3)
+	_difficulty_slider.add_theme_stylebox_override("grabber_area", fill)
+	_difficulty_slider.add_theme_stylebox_override("grabber_area_highlight", fill)
+	var track: StyleBoxFlat = StyleBoxFlat.new()
+	track.bg_color = Color(0.12, 0.14, 0.18, 1.0)
+	track.set_corner_radius_all(3)
+	track.content_margin_top = 5.0
+	track.content_margin_bottom = 5.0
+	_difficulty_slider.add_theme_stylebox_override("slider", track)
+	_difficulty_slider.modulate = Color.WHITE
+
+
+func _difficulty_color() -> Color:
+	var index: int = clampi(_difficulty - Balance.STAT_MIN, 0, DIFFICULTY_COLORS.size() - 1)
+	return DIFFICULTY_COLORS[index]
+
+
+func _tick_round(delta: float) -> void:
+	_round_left = maxf(_round_left - delta, 0.0)
+	_refresh_timer()
+	if _round_left <= 0.0:
+		_end_round()
+
+
+func _refresh_timer() -> void:
+	var total: int = int(ceil(_round_left)) if _round_left > 0.0 else 0
+	var minutes: int = int(total / 60)
+	var seconds: int = total % 60
+	_timer_label.text = "%d:%02d" % [minutes, seconds]
+
+
+func _end_round() -> void:
+	_round_over = true
+	_timer_label.text = "0:00"
+	_score_label.text = "Счёт: %d" % _gold_earned
+	_score_overlay.visible = true
+	get_tree().paused = true
+
+
+func _build_score_overlay() -> void:
+	_score_overlay = Control.new()
+	_score_overlay.process_mode = Node.PROCESS_MODE_ALWAYS
+	_score_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_score_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	_score_overlay.visible = false
+	add_child(_score_overlay)
+	var dim: ColorRect = ColorRect.new()
+	dim.color = Color(0.0, 0.0, 0.0, 0.62)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	_score_overlay.add_child(dim)
+	var column: VBoxContainer = UiKit.centered_panel(_score_overlay)
+	column.add_child(UiKit.title("Время вышло"))
+	_score_label = UiKit.title("")
+	column.add_child(_score_label)
+	column.add_child(UiKit.hint("Заработано монет, без учёта трат"))
