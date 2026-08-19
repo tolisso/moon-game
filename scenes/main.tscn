@@ -1,9 +1,8 @@
-[gd_scene load_steps=10 format=3 uid="uid://duhjj2rn1fyt1"]
+[gd_scene load_steps=9 format=3 uid="uid://duhjj2rn1fyt1"]
 
 [ext_resource type="Script" uid="uid://b31ajdrabijab" path="res://scripts/world.gd" id="1_world"]
 [ext_resource type="Script" uid="uid://b1syw33a580ql" path="res://scripts/graticule.gd" id="2_graticule"]
 [ext_resource type="Script" uid="uid://cq0ujlmytmppg" path="res://scripts/base_station.gd" id="3_base"]
-[ext_resource type="Script" uid="uid://bslumsa8csn7k" path="res://scripts/upgrade_dialog.gd" id="5_upgrade"]
 [ext_resource type="Script" uid="uid://biepoqevtklaj" path="res://scripts/range_view.gd" id="6_range"]
 [ext_resource type="Script" path="res://scripts/craters.gd" id="7_craters"]
 
@@ -65,26 +64,54 @@ script = ExtResource("6_range")
 
 [node name="UI" type="CanvasLayer" parent="."]
 
-[node name="SpawnSettings" type="VBoxContainer" parent="UI"]
-offset_left = 16.0
-offset_top = 8.0
-offset_right = 360.0
-offset_bottom = 68.0
-theme_override_constants/separation = 4
+[node name="LeftPanel" type="PanelContainer" parent="UI"]
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_right = 340.0
+grow_vertical = 2
 
-[node name="DistanceRow" type="HBoxContainer" parent="UI/SpawnSettings"]
+[node name="Margin" type="MarginContainer" parent="UI/LeftPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 14
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 14
+
+[node name="Column" type="VBoxContainer" parent="UI/LeftPanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="GoldLabel" type="Label" parent="UI/LeftPanel/Margin/Column"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.85, 0.5, 1)
+theme_override_font_sizes/font_size = 20
+text = "Золото: 0"
+
+[node name="Fleet" type="VBoxContainer" parent="UI/LeftPanel/Margin/Column"]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="DistanceLabel" type="Label" parent="UI/SpawnSettings/DistanceRow"]
-custom_minimum_size = Vector2(130, 0)
+[node name="Spacer" type="Control" parent="UI/LeftPanel/Margin/Column"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="SpawnSettings" type="VBoxContainer" parent="UI/LeftPanel/Margin/Column"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="DistanceRow" type="HBoxContainer" parent="UI/LeftPanel/Margin/Column/SpawnSettings"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="DistanceLabel" type="Label" parent="UI/LeftPanel/Margin/Column/SpawnSettings/DistanceRow"]
+custom_minimum_size = Vector2(110, 0)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.87, 0.92, 1, 1)
 theme_override_font_sizes/font_size = 14
 text = "Макс. дистанция"
 
-[node name="DistanceSlider" type="HSlider" parent="UI/SpawnSettings/DistanceRow"]
-custom_minimum_size = Vector2(160, 0)
+[node name="DistanceSlider" type="HSlider" parent="UI/LeftPanel/Margin/Column/SpawnSettings/DistanceRow"]
+custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 focus_mode = 0
@@ -92,26 +119,26 @@ min_value = 1.0
 max_value = 6.0
 value = 3.0
 
-[node name="DistanceValue" type="Label" parent="UI/SpawnSettings/DistanceRow"]
+[node name="DistanceValue" type="Label" parent="UI/LeftPanel/Margin/Column/SpawnSettings/DistanceRow"]
 custom_minimum_size = Vector2(20, 0)
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.85, 0.5, 1)
 theme_override_font_sizes/font_size = 14
 text = "3"
 
-[node name="WeightRow" type="HBoxContainer" parent="UI/SpawnSettings"]
+[node name="WeightRow" type="HBoxContainer" parent="UI/LeftPanel/Margin/Column/SpawnSettings"]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="WeightLabel" type="Label" parent="UI/SpawnSettings/WeightRow"]
-custom_minimum_size = Vector2(130, 0)
+[node name="WeightLabel" type="Label" parent="UI/LeftPanel/Margin/Column/SpawnSettings/WeightRow"]
+custom_minimum_size = Vector2(110, 0)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.87, 0.92, 1, 1)
 theme_override_font_sizes/font_size = 14
 text = "Макс. вес"
 
-[node name="WeightSlider" type="HSlider" parent="UI/SpawnSettings/WeightRow"]
-custom_minimum_size = Vector2(160, 0)
+[node name="WeightSlider" type="HSlider" parent="UI/LeftPanel/Margin/Column/SpawnSettings/WeightRow"]
+custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 focus_mode = 0
@@ -119,32 +146,12 @@ min_value = 1.0
 max_value = 6.0
 value = 3.0
 
-[node name="WeightValue" type="Label" parent="UI/SpawnSettings/WeightRow"]
+[node name="WeightValue" type="Label" parent="UI/LeftPanel/Margin/Column/SpawnSettings/WeightRow"]
 custom_minimum_size = Vector2(20, 0)
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.85, 0.5, 1)
 theme_override_font_sizes/font_size = 14
 text = "3"
-
-[node name="GoldLabel" type="Label" parent="UI"]
-offset_left = 16.0
-offset_top = 76.0
-offset_right = 420.0
-offset_bottom = 106.0
-theme_override_colors/font_color = Color(1, 0.85, 0.5, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 0.784314)
-theme_override_constants/outline_size = 6
-theme_override_font_sizes/font_size = 18
-
-[node name="StatusLabel" type="Label" parent="UI"]
-offset_left = 16.0
-offset_top = 104.0
-offset_right = 520.0
-offset_bottom = 134.0
-theme_override_colors/font_color = Color(0.87, 0.92, 1, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 0.784314)
-theme_override_constants/outline_size = 6
-theme_override_font_sizes/font_size = 16
 
 [node name="OrderPopups" type="Control" parent="UI"]
 layout_mode = 3
@@ -154,13 +161,3 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-
-[node name="UpgradeDialog" type="Control" parent="UI"]
-layout_mode = 3
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-script = ExtResource("5_upgrade")

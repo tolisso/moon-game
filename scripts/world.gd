@@ -13,6 +13,7 @@ const CAMERA_ZOOM_STEP: float = 0.2
 const BASE_GEO_LAT: float = 90.0
 const BASE_GEO_LON: float = 0.0
 const POPUP_LIFT: float = 0.12
+const LEFT_PANEL_WIDTH: float = 340.0
 const NUMBER_KEYS: Array[int] = [KEY_1, KEY_2, KEY_3]
 const NUMBER_KEYS_PAD: Array[int] = [KEY_KP_1, KEY_KP_2, KEY_KP_3]
 
@@ -25,14 +26,14 @@ const NUMBER_KEYS_PAD: Array[int] = [KEY_KP_1, KEY_KP_2, KEY_KP_3]
 @onready var _orders_root: Node3D = $PlanetPivot/Orders
 @onready var _range_view: RangeView = $PlanetPivot/RangeView
 @onready var _camera: Camera3D = $Camera3D
-@onready var _upgrade_dialog: UpgradeDialog = $UI/UpgradeDialog
-@onready var _gold_label: Label = $UI/GoldLabel
-@onready var _status_label: Label = $UI/StatusLabel
+@onready var _left_panel: PanelContainer = $UI/LeftPanel
+@onready var _gold_label: Label = $UI/LeftPanel/Margin/Column/GoldLabel
+@onready var _fleet_host: VBoxContainer = $UI/LeftPanel/Margin/Column/Fleet
 @onready var _popups_root: Control = $UI/OrderPopups
-@onready var _distance_slider: HSlider = $UI/SpawnSettings/DistanceRow/DistanceSlider
-@onready var _distance_value: Label = $UI/SpawnSettings/DistanceRow/DistanceValue
-@onready var _weight_slider: HSlider = $UI/SpawnSettings/WeightRow/WeightSlider
-@onready var _weight_value: Label = $UI/SpawnSettings/WeightRow/WeightValue
+@onready var _distance_slider: HSlider = $UI/LeftPanel/Margin/Column/SpawnSettings/DistanceRow/DistanceSlider
+@onready var _distance_value: Label = $UI/LeftPanel/Margin/Column/SpawnSettings/DistanceRow/DistanceValue
+@onready var _weight_slider: HSlider = $UI/LeftPanel/Margin/Column/SpawnSettings/WeightRow/WeightSlider
+@onready var _weight_value: Label = $UI/LeftPanel/Margin/Column/SpawnSettings/WeightRow/WeightValue
 
 ## Pitch is clamped to ±85°; start at the top so the north-pole base faces us.
 var _yaw_deg: float = 0.0
@@ -40,6 +41,7 @@ var _pitch_deg: float = MAX_PITCH_DEG
 var _camera_distance: float = 3.0
 var _gold: int = Balance.START_GOLD
 var _rovers: Array[Rover] = []
+var _cards: Array[RoverCard] = []
 var _paths: Array[PathView] = []
 var _orders: Array[DeliveryOrder] = []
 var _popups: Array[OrderPopup] = []
@@ -55,13 +57,14 @@ func _ready() -> void:
 	_craters.setup(PLANET_RADIUS, _base.geo)
 	_range_view.setup(PLANET_RADIUS)
 	_range_view.build_contours(_base.geo, _craters)
-	_upgrade_dialog.upgrade_requested.connect(_on_upgrade_requested)
+	_style_left_panel()
 	_setup_spawn_sliders()
 	_spawn_fleet()
 	_apply_planet_rotation()
+	get_viewport().size_changed.connect(_apply_camera_distance)
 	_apply_camera_distance()
 	_refresh_gold()
-	_refresh_status()
+	_refresh_fleet_cards()
 	for i in Balance.START_ORDERS:
 		_spawn_order()
 	_next_order_in = Balance.ORDER_SPAWN_INTERVAL
@@ -109,7 +112,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if _handle_number_key(key.keycode):
 			get_viewport().set_input_as_handled()
 			return
-		if key.is_action_pressed("ui_cancel") and not _upgrade_dialog.is_open():
+		if key.is_action_pressed("ui_cancel"):
 			_select_rover(null)
 			return
 
@@ -117,13 +120,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if button == null or not button.pressed:
 		return
 	match button.button_index:
-		MOUSE_BUTTON_LEFT:
-			if _upgrade_dialog.is_open():
-				_upgrade_dialog.close()
-			else:
-				_handle_click(button.position)
 		MOUSE_BUTTON_RIGHT:
-			_upgrade_dialog.close()
 			_select_rover(null)
 		MOUSE_BUTTON_WHEEL_UP:
 			_camera_distance = maxf(_camera_distance - CAMERA_ZOOM_STEP, CAMERA_MIN_DIST)
@@ -165,6 +162,13 @@ func _spawn_fleet() -> void:
 		_paths_root.add_child(path)
 		path.setup(PLANET_RADIUS, rover.color)
 		_paths.append(path)
+
+		var card: RoverCard = RoverCard.new()
+		_fleet_host.add_child(card)
+		card.setup(rover)
+		card.selected.connect(_on_card_selected)
+		card.upgrade_requested.connect(_on_upgrade_requested)
+		_cards.append(card)
 
 
 func _handle_order_spawning(delta: float) -> void:
@@ -226,7 +230,6 @@ func _select_rover(rover: Rover) -> void:
 		_clear_popups()
 	else:
 		_rebuild_popups()
-	_refresh_status()
 	_refresh_selection_visuals()
 
 
@@ -253,7 +256,7 @@ func _clear_popups() -> void:
 
 
 func _refresh_selection_visuals() -> void:
-	_refresh_status()
+	_refresh_fleet_cards()
 	if _selected == null:
 		return
 	_range_view.show_max_energy(_selected.max_energy)
@@ -326,26 +329,22 @@ func _on_upgrade_requested(rover: Rover, stat: Rover.Stat) -> void:
 	_gold -= cost
 	rover.apply_upgrade(stat)
 	_refresh_gold()
-	if _selected != null:
+	_refresh_fleet_cards()
+	if rover == _selected:
 		_rebuild_popups()
+
+
+func _on_card_selected(rover: Rover) -> void:
+	_select_rover(null if _selected == rover else rover)
 
 
 func _refresh_gold() -> void:
 	_gold_label.text = "Золото: %d" % _gold
-	_upgrade_dialog.set_gold(_gold)
 
 
-func _refresh_status() -> void:
-	if _selected == null:
-		_status_label.text = ""
-		return
-	if _selected.is_busy():
-		_status_label.text = "%s · возврат %.1f с" % [_selected.title, _selected.remaining_trip_time()]
-	else:
-		_status_label.text = (
-			"%s · заряд %.2f/%d · вес %d"
-			% [_selected.title, _selected.energy, _selected.max_energy, _selected.max_weight]
-		)
+func _refresh_fleet_cards() -> void:
+	for card in _cards:
+		card.refresh(_gold, card.rover == _selected)
 
 
 func _handle_rotation(delta: float) -> void:
@@ -367,7 +366,17 @@ func _apply_planet_rotation() -> void:
 
 
 func _apply_camera_distance() -> void:
-	_camera.position = Vector3(0.0, 0.0, _camera_distance)
+	var view: Vector2 = get_viewport().get_visible_rect().size
+	_camera.position.z = _camera_distance
+	if view.x <= 1.0 or view.y <= 1.0:
+		_camera.position.x = 0.0
+		return
+	var playfield_center: float = LEFT_PANEL_WIDTH + (view.x - LEFT_PANEL_WIDTH) * 0.5
+	var shift_px: float = playfield_center - view.x * 0.5
+	var half_vertical: float = tan(deg_to_rad(_camera.fov * 0.5)) * _camera_distance
+	var half_horizontal: float = half_vertical * (view.x / view.y)
+	_camera.position.x = -shift_px / (view.x * 0.5) * half_horizontal
+	_camera.position.y = 0.0
 
 
 func _refresh_paths() -> void:
@@ -375,19 +384,9 @@ func _refresh_paths() -> void:
 		_paths[i].refresh(_rovers[i].remaining_path(PATH_SAMPLES))
 
 
-func _handle_click(screen_pos: Vector2) -> void:
-	var point: GeoCoord = _geo_under_cursor(screen_pos)
-	if point == null:
-		return
-	if _base.covers(point):
-		_upgrade_dialog.open(_rovers, _gold)
-
-
-func _geo_under_cursor(screen_pos: Vector2) -> GeoCoord:
-	var to_planet: Transform3D = _planet_pivot.global_transform.affine_inverse()
-	var origin: Vector3 = to_planet * _camera.project_ray_origin(screen_pos)
-	var direction: Vector3 = to_planet.basis * _camera.project_ray_normal(screen_pos)
-	var hit: Geo.SphereHit = Geo.ray_sphere(origin, direction, PLANET_RADIUS)
-	if not hit.hit:
-		return null
-	return Geo.geo_from_unit(hit.point)
+func _style_left_panel() -> void:
+	var style: StyleBoxFlat = StyleBoxFlat.new()
+	style.bg_color = Color(0.035, 0.045, 0.07, 0.96)
+	style.border_color = Color(0.28, 0.4, 0.55, 0.7)
+	style.border_width_right = 1
+	_left_panel.add_theme_stylebox_override("panel", style)

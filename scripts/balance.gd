@@ -33,7 +33,8 @@ const CRATER_RADIUS_DEG: float = 12.0
 
 # --- Upgrades ---
 
-const UPGRADE_COST: int = 1
+## Cost to go from level N to N+1 doubles each time: 1, 2, 4, 8, 16.
+const UPGRADE_COST_BASE: int = 1
 
 # --- Orders ---
 
@@ -49,7 +50,6 @@ const ORDER_WEIGHT_MIN: int = 1
 # --- Gold ---
 
 const START_GOLD: int = 0
-const DELIVERY_REWARD: int = 1
 
 
 static func range_deg(energy: float) -> float:
@@ -70,8 +70,13 @@ static func recharge_time(missing_energy: float) -> float:
 	return missing_energy / RECHARGE_PER_SEC
 
 
-static func delivery_reward(_distance_deg: float, _weight: float) -> int:
-	return DELIVERY_REWARD
+static func delivery_reward(_distance_deg: float, weight: float) -> int:
+	return maxi(int(weight), 0)
+
+
+static func upgrade_cost(level: int) -> int:
+	var from_level: int = clampi(level, STAT_MIN, STAT_MAX - 1)
+	return UPGRADE_COST_BASE << (from_level - STAT_MIN)
 
 
 ## Slider tiers 1..6 map to spawn distance the same way rover energy does.

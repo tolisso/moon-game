@@ -144,8 +144,8 @@ func is_stat_maxed(stat: Stat) -> bool:
 	return int(stat_value(stat)) >= Balance.STAT_MAX
 
 
-func upgrade_cost(_stat: Stat) -> int:
-	return Balance.UPGRADE_COST
+func upgrade_cost(stat: Stat) -> int:
+	return Balance.upgrade_cost(int(stat_value(stat)))
 
 
 func apply_upgrade(stat: Stat) -> void:
