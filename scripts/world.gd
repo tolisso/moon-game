@@ -60,6 +60,8 @@ var _popups: Array[OrderPopup] = []
 var _next_order_in: float = 0.0
 var _selected: Rover = null
 var _difficulty: int = 3
+var _save_store: SaveStore = null
+var _load_dialog: LoadDialog = null
 
 
 func _ready() -> void:
@@ -73,6 +75,7 @@ func _ready() -> void:
 	_style_top_bar()
 	_setup_difficulty_slider()
 	_build_score_overlay()
+	_build_save_ui()
 	_spawn_fleet()
 	_apply_planet_rotation()
 	_apply_camera_distance()
@@ -83,6 +86,12 @@ func _ready() -> void:
 	for i in Balance.START_ORDERS:
 		_spawn_order()
 	_next_order_in = Balance.ORDER_SPAWN_INTERVAL
+
+
+func _exit_tree() -> void:
+	if _save_store != null:
+		_save_store.close()
+		_save_store = null
 
 
 func _setup_difficulty_slider() -> void:
@@ -450,9 +459,205 @@ func _refresh_timer() -> void:
 func _end_round() -> void:
 	_round_over = true
 	_timer_label.text = "0:00"
+	_show_round_over()
+
+
+func _show_round_over() -> void:
 	_score_label.text = "Счёт: %d" % _gold_earned
 	_score_overlay.visible = true
 	get_tree().paused = true
+
+
+func _hide_round_over() -> void:
+	_score_overlay.visible = false
+
+
+func _build_save_ui() -> void:
+	_save_store = SaveStore.new()
+	_save_store.open()
+
+	var bar_layer: CanvasLayer = CanvasLayer.new()
+	bar_layer.layer = 20
+	bar_layer.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(bar_layer)
+	var bar_root: Control = Control.new()
+	bar_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	bar_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bar_layer.add_child(bar_root)
+	var row: HBoxContainer = HBoxContainer.new()
+	row.anchor_left = 1.0
+	row.anchor_top = 0.0
+	row.anchor_right = 1.0
+	row.anchor_bottom = 0.0
+	row.offset_left = -236.0
+	row.offset_top = 10.0
+	row.offset_right = -12.0
+	row.offset_bottom = 42.0
+	row.add_theme_constant_override("separation", 8)
+	bar_root.add_child(row)
+	var save_button: Button = UiKit.action_button("Сохранить", 108.0)
+	save_button.pressed.connect(_on_save_pressed)
+	row.add_child(save_button)
+	var load_button: Button = UiKit.action_button("Загрузить", 108.0)
+	load_button.pressed.connect(_on_load_pressed)
+	row.add_child(load_button)
+
+	var dialog_layer: CanvasLayer = CanvasLayer.new()
+	dialog_layer.layer = 30
+	dialog_layer.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(dialog_layer)
+	_load_dialog = LoadDialog.new()
+	dialog_layer.add_child(_load_dialog)
+	_load_dialog.load_requested.connect(_on_load_requested)
+	_load_dialog.closed.connect(_on_load_dialog_closed)
+
+
+func _on_save_pressed() -> void:
+	_save_store.write_save(_capture_snapshot())
+
+
+func _on_load_pressed() -> void:
+	get_tree().paused = true
+	_load_dialog.open(_save_store)
+
+
+func _on_load_dialog_closed() -> void:
+	if not _round_over:
+		get_tree().paused = false
+
+
+func _on_load_requested(save_id: int) -> void:
+	var snapshot: Dictionary = _save_store.load_save(save_id)
+	if snapshot.is_empty():
+		return
+	_apply_snapshot(snapshot)
+
+
+func _capture_snapshot() -> Dictionary:
+	var orders_data: Array = []
+	for order in _orders:
+		orders_data.append(
+			{
+				"lat": order.geo.lat_deg,
+				"lon": order.geo.lon_deg,
+				"created_at": order.created_at,
+				"weight": order.cargo,
+				"time_left": order.time_left,
+				"assigned": order.assigned,
+			}
+		)
+	var rovers_data: Array = []
+	for i in _rovers.size():
+		var rover: Rover = _rovers[i]
+		rovers_data.append(
+			{
+				"slot": i,
+				"state": rover.state_id(),
+				"lat": rover.geo.lat_deg,
+				"lon": rover.geo.lon_deg,
+				"order_index": _orders.find(rover.current_order()),
+				"max_energy": rover.max_energy,
+				"max_weight": rover.max_weight,
+				"energy": rover.energy,
+				"cargo": rover.cargo,
+			}
+		)
+	return {
+		"remaining_time": _round_left,
+		"score": _gold_earned,
+		"gold": _gold,
+		"difficulty": _difficulty,
+		"next_order_in": _next_order_in,
+		"round_over": _round_over,
+		"yaw": _yaw_deg,
+		"pitch": _pitch_deg,
+		"camera_distance": _camera_distance,
+		"selected_rover": _rovers.find(_selected),
+		"crater_json": JSON.stringify(_craters.export_centres()),
+		"orders": orders_data,
+		"rovers": rovers_data,
+	}
+
+
+func _apply_snapshot(snapshot: Dictionary) -> void:
+	_select_rover(null)
+	var crater_payload: Variant = JSON.parse_string(str(snapshot.get("crater_json", "[]")))
+	if crater_payload is Array:
+		_craters.rebuild_from(crater_payload)
+		_range_view.rebuild_contours(_base.geo, _craters)
+	_clear_orders()
+	var orders_by_id: Dictionary = {}
+	for row in snapshot.get("orders", []):
+		var order_row: Dictionary = row
+		var order: DeliveryOrder = DeliveryOrder.new()
+		_orders_root.add_child(order)
+		order.setup(
+			PLANET_RADIUS,
+			GeoCoord.new(float(order_row.get("lat", 0.0)), float(order_row.get("lon", 0.0))),
+			float(order_row.get("weight", 1.0)),
+			float(order_row.get("time_left", Balance.ORDER_LIFETIME)),
+			float(order_row.get("created_at", 0.0))
+		)
+		if int(order_row.get("assigned", 0)) != 0:
+			order.set_assigned(true)
+		_orders.append(order)
+		orders_by_id[int(order_row.get("id", -1))] = order
+	var rover_rows: Array = snapshot.get("rovers", [])
+	rover_rows.sort_custom(func(a, b): return int(a.get("slot", 0)) < int(b.get("slot", 0)))
+	for row in rover_rows:
+		var rover_row: Dictionary = row
+		var slot: int = int(rover_row.get("slot", 0))
+		if slot < 0 or slot >= _rovers.size():
+			continue
+		var order_id: Variant = rover_row.get("order_id")
+		var order: DeliveryOrder = null
+		if order_id != null:
+			order = orders_by_id.get(int(order_id), null)
+		_rovers[slot].apply_saved_state(
+			int(rover_row.get("state", Rover.State.DOCKED)),
+			GeoCoord.new(float(rover_row.get("lat", BASE_GEO_LAT)), float(rover_row.get("lon", BASE_GEO_LON))),
+			int(rover_row.get("max_energy", Balance.START_ENERGY)),
+			int(rover_row.get("max_weight", Balance.START_WEIGHT)),
+			float(rover_row.get("energy", Balance.START_ENERGY)),
+			float(rover_row.get("cargo", 0.0)),
+			order
+		)
+	_gold = int(snapshot.get("gold", 0))
+	_gold_earned = int(snapshot.get("score", 0))
+	_round_left = float(snapshot.get("remaining_time", 0.0))
+	_round_over = bool(snapshot.get("round_over", false))
+	_next_order_in = float(snapshot.get("next_order_in", Balance.ORDER_SPAWN_INTERVAL))
+	_difficulty = clampi(int(snapshot.get("difficulty", 3)), Balance.STAT_MIN, Balance.STAT_MAX)
+	_yaw_deg = float(snapshot.get("yaw", 0.0))
+	_pitch_deg = clampf(float(snapshot.get("pitch", MAX_PITCH_DEG)), -MAX_PITCH_DEG, MAX_PITCH_DEG)
+	_camera_distance = clampf(
+		float(snapshot.get("camera_distance", 3.0)), CAMERA_MIN_DIST, CAMERA_MAX_DIST
+	)
+	_difficulty_slider.set_value_no_signal(float(_difficulty))
+	_style_difficulty_slider()
+	_refresh_difficulty_label()
+	_apply_planet_rotation()
+	_apply_camera_distance()
+	_refresh_gold()
+	_refresh_timer()
+	_refresh_paths()
+	var selected_index: int = int(snapshot.get("selected_rover", -1))
+	if selected_index >= 0 and selected_index < _rovers.size():
+		_select_rover(_rovers[selected_index])
+	else:
+		_refresh_fleet_cards()
+	if _round_over:
+		_show_round_over()
+	else:
+		_hide_round_over()
+		get_tree().paused = false
+
+
+func _clear_orders() -> void:
+	_clear_popups()
+	for order in _orders:
+		order.queue_free()
+	_orders.clear()
 
 
 func _build_score_overlay() -> void:

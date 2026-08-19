@@ -21,6 +21,14 @@ func setup(planet_radius: float) -> void:
 	visible = false
 
 
+func rebuild_contours(centre: GeoCoord, craters: Craters) -> void:
+	for ring in _rings:
+		remove_child(ring)
+		ring.free()
+	_rings.clear()
+	build_contours(centre, craters)
+
+
 func build_contours(centre: GeoCoord, craters: Craters) -> void:
 	var origin: Vector3 = centre.to_unit()
 	var u: Vector3 = Geo.any_tangent(origin)

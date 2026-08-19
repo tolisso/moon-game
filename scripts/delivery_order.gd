@@ -18,16 +18,24 @@ var geo: GeoCoord = GeoCoord.new()
 var cargo: float = 1.0
 var assigned: bool = false
 var time_left: float = Balance.ORDER_LIFETIME
+var created_at: float = 0.0
 
 var _radius_deg: float = BASE_RADIUS_DEG
 var _pieces: Array[MeshInstance3D] = []
 var _colors: Array[Color] = []
 
 
-func setup(planet_radius: float, place: GeoCoord, required_cargo: float) -> void:
+func setup(
+	planet_radius: float,
+	place: GeoCoord,
+	required_cargo: float,
+	remaining: float = -1.0,
+	created: float = -1.0
+) -> void:
 	geo = place.copy()
 	cargo = required_cargo
-	time_left = Balance.ORDER_LIFETIME
+	time_left = remaining if remaining >= 0.0 else Balance.ORDER_LIFETIME
+	created_at = created if created >= 0.0 else Time.get_unix_time_from_system()
 	_radius_deg = minf(BASE_RADIUS_DEG + cargo * RADIUS_PER_CARGO_DEG, MAX_RADIUS_DEG)
 	var centre: Vector3 = geo.to_unit()
 	_add(

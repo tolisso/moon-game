@@ -119,6 +119,55 @@ func remaining_arc_deg() -> float:
 	return rad_to_deg(_total_rad - _travelled_rad)
 
 
+func current_order() -> DeliveryOrder:
+	return _order
+
+
+func state_id() -> int:
+	return int(_state)
+
+
+## Restores a snapshot without charging energy again. Outbound trips resume
+## from the saved coordinates toward the same order.
+func apply_saved_state(
+	state: int,
+	place: GeoCoord,
+	saved_max_energy: int,
+	saved_max_weight: int,
+	saved_energy: float,
+	saved_cargo: float,
+	order: DeliveryOrder
+) -> void:
+	max_energy = saved_max_energy
+	max_weight = saved_max_weight
+	energy = saved_energy
+	cargo = saved_cargo
+	geo = place.copy()
+	_order = order
+	_state = clampi(state, int(State.DOCKED), int(State.RETURNING)) as State
+	match _state:
+		State.DOCKED:
+			visible = false
+			geo = home.copy()
+			_moving = false
+			_destination = null
+			_order = null
+		State.OUTBOUND:
+			visible = true
+			if order != null:
+				_begin_move(order.geo)
+			else:
+				_state = State.RETURNING
+				cargo = 0.0
+				_begin_move(home)
+		State.RETURNING:
+			visible = true
+			_order = null
+			_begin_move(home)
+	_apply_transform()
+	_update_bars()
+
+
 func dispatch(order: DeliveryOrder) -> void:
 	energy = maxf(energy - _craters.energy_needed(home, order.geo), 0.0)
 	_order = order

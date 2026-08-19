@@ -31,6 +31,29 @@ func setup(planet_radius: float, base_geo: GeoCoord) -> void:
 	_build_meshes()
 
 
+func export_centres() -> Array:
+	var rows: Array = []
+	for centre in _centres:
+		var geo: GeoCoord = Geo.geo_from_unit(centre)
+		rows.append({ "lat": geo.lat_deg, "lon": geo.lon_deg })
+	return rows
+
+
+func rebuild_from(points: Array) -> void:
+	_clear_meshes()
+	_centres.clear()
+	for point in points:
+		var row: Dictionary = point
+		_centres.append(GeoCoord.new(float(row.get("lat", 0.0)), float(row.get("lon", 0.0))).to_unit())
+	_build_meshes()
+
+
+func _clear_meshes() -> void:
+	for child in get_children():
+		remove_child(child)
+		child.free()
+
+
 func contains_geo(geo: GeoCoord) -> bool:
 	return contains_unit(geo.to_unit())
 
